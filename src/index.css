@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: #0a0a0f;
+  color: #e4e4e7;
+  font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3a3a45;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* 选中文本配色 */
+::selection {
+  background-color: rgba(16, 217, 133, 0.25);
+  color: #ffffff;
+}
+
+/* 焦点环统一 */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-accent-emerald/60 focus:ring-offset-2 focus:ring-offset-bg-deep;
+}
+
+/* 背景氛围层 */
+.bg-atmosphere {
+  background-color: #0a0a0f;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(16, 217, 133, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(20, 184, 166, 0.06) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(0, 212, 255, 0.04) 0px, transparent 50%);
+}
+
+/* 卡片基础样式 */
+.card-base {
+  @apply bg-bg-card/80 backdrop-blur-sm border border-border-subtle rounded-xl shadow-card;
+}
+
+/* 按钮基础 */
+.btn-base {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-accent-emerald/60 focus:ring-offset-2 focus:ring-offset-bg-deep disabled:opacity-40 disabled:cursor-not-allowed;
+}
+
+.btn-primary {
+  @apply btn-base bg-accent-emerald text-bg-deep hover:bg-accent-emerald/90 hover:shadow-glow;
+}
+
+.btn-secondary {
+  @apply btn-base bg-bg-elevated text-zinc-200 border border-border-default hover:bg-bg-hover hover:border-accent-emerald/50;
+}
+
+.btn-ghost {
+  @apply btn-base text-zinc-400 hover:text-zinc-100 hover:bg-bg-hover;
+}
+
+/* 输入框基础 */
+.input-base {
+  @apply w-full bg-bg-deep/60 border border-border-default rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors focus:outline-none focus:border-accent-emerald/60 focus:ring-1 focus:ring-accent-emerald/40;
+}
+
+/* 标签徽章 */
+.badge {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide uppercase;
+}
+
+/* 内容预览代码块 */
+.code-block {
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre;
+  tab-size: 2;
+}
