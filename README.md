@@ -1,4 +1,4 @@
-# MetaGO Studio
+﻿# MetaGO Studio
 
 > 可视化技能编排平台 — 拖拽组合 MetaGO 技能，生成定制 Kit
 >
@@ -54,9 +54,9 @@ MetaGO 是一套完整的产品矩阵，让 AI 从工具进化为生命体：
 | [MCP Server](https://www.npmjs.com/package/@metago-ai/mcp-server) | 平台工具 | 22 tools + 8 prompts MCP服务 |
 | [CLI](https://gitee.com/metago/metago-cli) | 平台工具 | 跨平台命令行工具 |
 | **Studio**（本产品） | 平台工具 | 可视化技能编排平台 |
-| [Skills SDK](https://gitee.com/metago/metago-skills-sdk) | 生态基础设施 | TypeScript技能开发SDK |
-| [Skills Hub](https://gitee.com/metago/metago-skills-hub) | 生态基础设施 | 技能市场 |
-| [Certify](https://gitee.com/metago/metago-certify) | 生态基础设施 | 技能认证体系（Gold/Silver） |
+| [Skills SDK](https://gitee.com/metago/skills-sdk) | 生态基础设施 | TypeScript技能开发SDK |
+| [Skills Hub](https://gitee.com/metago/skills-hub) | 生态基础设施 | 技能市场 |
+| [Certify](https://gitee.com/metago/certify) | 生态基础设施 | 技能认证体系（Gold/Silver） |
 
 > 战略规划：[STRATEGY.md](https://gitee.com/metago/metagolifeform/blob/main/docs/STRATEGY.md) · 执行日志：[STRATEGY-EXECUTION-LOG.md](https://gitee.com/metago/metagolifeform/blob/main/docs/STRATEGY-EXECUTION-LOG.md)
 
