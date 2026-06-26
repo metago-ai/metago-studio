@@ -4,6 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "description": "MetaGO Studio - 可视化技能编排平台",
+  "repository": {
+    "type": "git",
+    "url": "https://gitee.com/metago/metago-studio.git"
+  },
+  "homepage": "https://gitee.com/metago/metago-studio",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
