@@ -1,4 +1,4 @@
-﻿import type { Skill } from '../types'
+import type { Skill } from '../types'
 
 /**
  * MetaGO Lifeform Kit 全部 26 个技能元数据
@@ -249,5 +249,5 @@ export const SKILLS: Skill[] = [
 ]
 
 /** 父包版本约束 */
-export const PARENT_PACKAGE_VERSION = '>=36.4.12'
+export const PARENT_PACKAGE_VERSION = '>=36.4.13'
 export const PARENT_PACKAGE_NAME = 'metago-lifeform'
