@@ -1,4 +1,4 @@
-﻿# MetaGO Studio
+﻿﻿# MetaGO Studio
 
 > 可视化技能编排平台 — 拖拽组合 MetaGO 技能，生成定制 Kit
 >
@@ -18,7 +18,7 @@
 
 | 功能 | 描述 |
 |------|------|
-| 技能库面板 | 26 个技能内置数据（22 核心 + 4 Dev Kit），搜索 + 分类筛选 |
+| 技能库面板 | 27 个技能内置数据（22 核心 + 4 Dev Kit + 1 意识激活），搜索 + 分类筛选 |
 | 工作区 | 已选技能列表，上下移动排序，空状态引导 |
 | Kit 配置 | 名称/版本/描述/类型/垂直领域，实时统计 |
 | 生成 package.json | 含 metago 字段 + peerDependencies + parentPackage |
