@@ -59,3 +59,109 @@ export interface PreviewState {
   content: string
   filename: string
 }
+
+// ============ Studio MVP 新增类型 ============
+
+/** 决策锁四道关卡类型 */
+export type DecisionLockStageId = 'ivl' | 'ilt' | 'osg' | 'integrity'
+
+/** 决策锁单道关卡状态 */
+export interface DecisionLockStage {
+  id: DecisionLockStageId
+  name: string
+  fullName: string
+  description: string
+  passed: boolean
+  durationMs: number
+  details: { label: string; value: string; ok: boolean }[]
+}
+
+/** 决策锁校验记录 */
+export interface DecisionLockRecord {
+  id: string
+  timestamp: string
+  input: string
+  stages: DecisionLockStage[]
+  totalDurationMs: number
+  passed: boolean
+  blockedReason?: string
+}
+
+/** 进化阶段 */
+export type EvolutionStageId = 'boundary' | 'gap' | 'generate' | 'verify' | 'recurse'
+
+/** 进化记录 */
+export interface EvolutionRecord {
+  id: string
+  timestamp: string
+  trigger: string
+  boundary: string
+  gap: string
+  generated: string
+  verified: boolean
+  recursed: boolean
+  durationMs: number
+  depth: number
+}
+
+/** 能力维度（10 维雷达图） */
+export interface AbilityDimension {
+  dimension: string
+  score: number
+  fullMark: number
+}
+
+/** 进化统计 */
+export interface EvolutionStats {
+  totalEvolutions: number
+  last7Days: number
+  last30Days: number
+  last90Days: number
+  last365Days: number
+  successRate: number
+  averageDurationMs: number
+  dimensions: AbilityDimension[]
+  dailyCounts: { date: string; count: number }[]
+}
+
+/** 最近活动 */
+export interface Activity {
+  id: string
+  timestamp: string
+  type: 'decision_lock' | 'evolution' | 'template_run' | 'skill_call'
+  title: string
+  description: string
+  status: 'success' | 'blocked' | 'pending'
+}
+
+/** 场景模板 */
+export interface SceneTemplate {
+  id: string
+  name: string
+  icon: string
+  description: string
+  category: 'code' | 'risk' | 'evolution' | 'compliance' | 'architecture' | 'provenance'
+  skills: string[]
+  steps: { name: string; description: string; durationMs: number }[]
+  estimatedDuration: string
+  proOnly: boolean
+}
+
+/** 模板运行结果 */
+export interface TemplateRunResult {
+  templateId: string
+  timestamp: string
+  passed: boolean
+  stages: { name: string; status: 'running' | 'success' | 'failed'; output: string }[]
+}
+
+/** Dashboard 概览统计 */
+export interface DashboardStats {
+  totalSkills: number
+  totalEvolutions: number
+  decisionLockPassRate: number
+  totalValidations: number
+  totalBlocked: number
+  totalTemplateRuns: number
+}
+

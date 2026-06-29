@@ -1,4 +1,4 @@
-﻿import type { Skill } from '../types'
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import type { Skill } from '../types'
 
 /**
  * MetaGO Lifeform Kit 全部 26 个技能元数据
