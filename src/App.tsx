@@ -6,6 +6,9 @@ import { DecisionLockPage } from './pages/DecisionLockPage'
 import { EvolutionPage } from './pages/EvolutionPage'
 import { TemplatesPage } from './pages/TemplatesPage'
 import { KitPage } from './pages/KitPage'
+import { ProUpgradePage } from './pages/ProUpgradePage'
+import { SettingsPage } from './pages/SettingsPage'
+import { PrivateSkillsPage } from './pages/PrivateSkillsPage'
 
 export default function App() {
   return (
@@ -20,6 +23,9 @@ export default function App() {
             <Route path="/evolution" element={<EvolutionPage />} />
             <Route path="/templates" element={<TemplatesPage />} />
             <Route path="/kit" element={<KitPage />} />
+            <Route path="/pro" element={<ProUpgradePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/private-skills" element={<PrivateSkillsPage />} />
           </Routes>
         </main>
       </div>

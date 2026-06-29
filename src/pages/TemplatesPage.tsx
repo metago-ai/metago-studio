@@ -25,11 +25,13 @@ const CATEGORY_COLORS: Record<string, string> = {
 }
 
 export function TemplatesPage() {
-  const { templates } = useStore()
+  const { templates, features } = useStore()
   const [activeCategory, setActiveCategory] = useState('all')
   const [runningTemplate, setRunningTemplate] = useState<SceneTemplate | null>(null)
   const [runResult, setRunResult] = useState<TemplateRunResult | null>(null)
   const [currentStep, setCurrentStep] = useState(0)
+
+  const canUseProTemplates = features.unlimitedTemplates
 
   const filteredTemplates =
     activeCategory === 'all'
@@ -139,10 +141,10 @@ export function TemplatesPage() {
             </div>
             <button
               onClick={() => runTemplate(template)}
-              disabled={template.proOnly}
-              className={`w-full ${template.proOnly ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-primary'} text-xs`}
+              disabled={template.proOnly && !canUseProTemplates}
+              className={`w-full ${template.proOnly && !canUseProTemplates ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-primary'} text-xs`}
             >
-              {template.proOnly ? (
+              {template.proOnly && !canUseProTemplates ? (
                 <>
                   <Lock className="w-3 h-3" />
                   Pro 专属

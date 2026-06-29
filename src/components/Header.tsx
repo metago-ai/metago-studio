@@ -1,23 +1,23 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard,
-  Sparkles,
-  Shield,
-  Dna,
-  Play,
-  Package,
+  LayoutDashboard, Sparkles, Shield, Dna, Play, Package,
+  Crown, Lock, Settings as SettingsIcon,
 } from 'lucide-react'
+import { useStore } from '../store/useStore'
 
 const NAV_ITEMS = [
   { to: '/', label: '首页', icon: LayoutDashboard, end: true },
   { to: '/skills', label: '技能库', icon: Sparkles, end: false },
   { to: '/decision-lock', label: '决策锁', icon: Shield, end: false },
-  { to: '/evolution', label: '进化档案', icon: Dna, end: false },
-  { to: '/templates', label: '场景模板', icon: Play, end: false },
-  { to: '/kit', label: 'Kit 生成器', icon: Package, end: false },
+  { to: '/evolution', label: '进化', icon: Dna, end: false },
+  { to: '/templates', label: '模板', icon: Play, end: false },
+  { to: '/kit', label: 'Kit', icon: Package, end: false },
 ]
 
 export function Header() {
+  const { tier, trialDaysRemaining } = useStore()
+  const isPro = tier === 'pro' || tier === 'team' || tier === 'trial'
+
   return (
     <header className="h-16 flex-shrink-0 border-b border-border-subtle bg-bg-card/60 backdrop-blur-md flex items-center justify-between px-4 lg:px-6 z-10">
       <div className="flex items-center gap-3 min-w-0">
@@ -38,7 +38,7 @@ export function Header() {
             }}
           />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 hidden sm:block">
           <h1 className="text-sm sm:text-base font-semibold text-zinc-100 leading-tight truncate">
             MetaGO Studio
           </h1>
@@ -65,10 +65,57 @@ export function Header() {
               }
             >
               <Icon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{item.label}</span>
+              <span className="hidden md:inline">{item.label}</span>
             </NavLink>
           )
         })}
+
+        {/* Pro 入口 */}
+        <NavLink
+          to="/private-skills"
+          className={({ isActive }) =>
+            `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+              isActive
+                ? 'bg-accent-teal/15 text-accent-teal border border-accent-teal/30'
+                : 'text-zinc-500 hover:text-zinc-200 hover:bg-bg-hover border border-transparent'
+            }`
+          }
+          title="私有技能库"
+        >
+          <Lock className="w-3.5 h-3.5" />
+          <span className="hidden md:inline">私有</span>
+        </NavLink>
+
+        <NavLink
+          to="/pro"
+          className={() =>
+            `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+              isPro
+                ? 'bg-accent-emerald/15 text-accent-emerald border border-accent-emerald/30'
+                : 'bg-accent-amber/10 text-accent-amber border border-accent-amber/30 hover:bg-accent-amber/20'
+            }`
+          }
+          title={isPro ? `Pro${trialDaysRemaining > 0 ? ` · ${trialDaysRemaining}d` : ''}` : '升级 Pro'}
+        >
+          <Crown className="w-3.5 h-3.5" />
+          <span className="hidden md:inline">
+            {isPro ? (trialDaysRemaining > 0 ? `${trialDaysRemaining}d` : 'Pro') : 'Pro'}
+          </span>
+        </NavLink>
+
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+              isActive
+                ? 'bg-zinc-700 text-zinc-100 border border-border-default'
+                : 'text-zinc-500 hover:text-zinc-200 hover:bg-bg-hover border border-transparent'
+            }`
+          }
+          title="设置"
+        >
+          <SettingsIcon className="w-3.5 h-3.5" />
+        </NavLink>
       </nav>
     </header>
   )

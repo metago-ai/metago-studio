@@ -1,19 +1,13 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Sparkles,
-  Dna,
-  Shield,
-  Code2,
-  Scale,
-  Play,
-  ArrowRight,
-  TrendingUp,
-  Activity as ActivityIcon,
+  Sparkles, Dna, Shield, Code2, Scale, Play, ArrowRight, TrendingUp,
+  Activity as ActivityIcon, Crown, Settings as SettingsIcon,
 } from 'lucide-react'
 import { StatCard } from '../components/StatCard'
 import { ActivityList } from '../components/ActivityList'
 import { useStore } from '../store/useStore'
+import { TIER_INFO } from '../lib/proGate'
 
 const QUICK_ENTRIES = [
   {
@@ -49,12 +43,9 @@ const ACCENT_MAP = {
 }
 
 export function Dashboard() {
-  const { skills, evolutionStats, activities, decisionLockHistory } = useStore()
+  const { skills, evolutionStats, activities, decisionLockHistory, tier, trialDaysRemaining, lockStats } = useStore()
 
-  const passRate = (
-    (decisionLockHistory.filter((r) => r.passed).length / decisionLockHistory.length) *
-    100
-  ).toFixed(1)
+  const passRate = lockStats.passRate.toFixed(1)
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -73,9 +64,26 @@ export function Dashboard() {
             MetaGO Studio · 元构超级智能生命体可视化操作台
           </p>
         </div>
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent-emerald/10 border border-accent-emerald/30">
-          <div className="w-2 h-2 rounded-full bg-accent-emerald animate-pulse-glow" />
-          <span className="text-xs text-accent-emerald font-medium">系统运行中</span>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/pro"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
+              tier === 'free'
+                ? 'bg-accent-amber/10 border-accent-amber/30 text-accent-amber hover:bg-accent-amber/20'
+                : tier === 'trial'
+                  ? 'bg-accent-amber/10 border-accent-amber/30 text-accent-amber'
+                  : 'bg-accent-emerald/10 border-accent-emerald/30 text-accent-emerald'
+            }`}
+          >
+            <Crown className="w-3.5 h-3.5" />
+            {tier === 'free' ? '升级 Pro' : `${TIER_INFO[tier].name}${trialDaysRemaining > 0 ? ` · ${trialDaysRemaining}d` : ''}`}
+          </Link>
+          <Link
+            to="/settings"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bg-elevated border border-border-subtle text-zinc-400 hover:text-zinc-200 text-xs"
+          >
+            <SettingsIcon className="w-3.5 h-3.5" />
+          </Link>
         </div>
       </motion.div>
 
@@ -97,7 +105,7 @@ export function Dashboard() {
           icon={Dna}
           label="进化次数"
           value={evolutionStats.totalEvolutions}
-          hint={`成功率 ${(evolutionStats.successRate * 100).toFixed(1)}%`}
+          hint={`成功率 ${evolutionStats.successRate.toFixed(1)}%`}
           accent="teal"
           trend={{ value: `+${evolutionStats.last7Days}`, positive: true }}
         />
@@ -177,7 +185,7 @@ export function Dashboard() {
           <div className="space-y-2">
             {evolutionStats.dailyCounts.map((day, i) => (
               <div key={day.date} className="flex items-center gap-3">
-                <span className="text-xs text-zinc-500 w-12">{day.date}</span>
+                <span className="text-xs text-zinc-500 w-12">{day.date.slice(5)}</span>
                 <div className="flex-1 h-6 bg-bg-elevated/50 rounded overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}

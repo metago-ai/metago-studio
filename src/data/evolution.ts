@@ -110,7 +110,7 @@ export const EVOLUTION_STATS: EvolutionStats = {
   last30Days: 23,
   last90Days: 38,
   last365Days: 47,
-  successRate: 0.957,
+  successRate: 95.7,
   averageDurationMs: 1324,
   dimensions: [
     { dimension: '代码', score: 92, fullMark: 100 },
