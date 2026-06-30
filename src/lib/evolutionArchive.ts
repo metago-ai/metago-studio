@@ -52,16 +52,16 @@ export function saveRecords(records: EvolutionRecord[]): void {
   }
 }
 
-/** 读取能力维度评分 */
+/** 读取能力维度评分（始终返回可变副本） */
 export function loadDimensions(): AbilityDimension[] {
   try {
     const raw = localStorage.getItem(CAPABILITY_KEY)
-    if (!raw) return DEFAULT_DIMENSIONS
+    if (!raw) return DEFAULT_DIMENSIONS.map(d => ({ ...d }))
     const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return DEFAULT_DIMENSIONS
-    return parsed as AbilityDimension[]
+    if (!Array.isArray(parsed)) return DEFAULT_DIMENSIONS.map(d => ({ ...d }))
+    return parsed.map(d => ({ ...d })) as AbilityDimension[]
   } catch {
-    return DEFAULT_DIMENSIONS
+    return DEFAULT_DIMENSIONS.map(d => ({ ...d }))
   }
 }
 
