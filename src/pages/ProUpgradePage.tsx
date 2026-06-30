@@ -23,7 +23,7 @@ export function ProUpgradePage() {
         '8 公理 + 7 属性 + 36 根本属性',
         '37 个 metago-* 技能',
         '7 平台适配器',
-        'MCP Server（42 tools）',
+        'MCP Server（35 tools）',
         '决策锁软校验（提示词驱动）',
       ],
       cta: '当前使用',
