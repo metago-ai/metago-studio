@@ -37,6 +37,8 @@ export function EvolutionPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [newTrigger, setNewTrigger] = useState('')
   const [newBoundary, setNewBoundary] = useState('')
+  const [addError, setAddError] = useState<string | null>(null)
+  const [addSuccess, setAddSuccess] = useState(false)
 
   const chartData = evolutionStats.dailyCounts.map((d) => ({
     date: d.date.slice(5), // MM-DD
@@ -49,6 +51,8 @@ export function EvolutionPage() {
 
   const handleAddRecord = () => {
     if (!newTrigger.trim() || !newBoundary.trim()) return
+    setAddError(null)
+    setAddSuccess(false)
     const record: EvolutionRecord = {
       id: `evo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       timestamp: new Date().toISOString(),
@@ -61,10 +65,20 @@ export function EvolutionPage() {
       durationMs: Math.floor(Math.random() * 2000) + 200,
       depth: Math.floor(Math.random() * 3) + 1,
     }
-    addEvolutionRecord(record)
-    setShowAddModal(false)
-    setNewTrigger('')
-    setNewBoundary('')
+    try {
+      addEvolutionRecord(record)
+      setAddSuccess(true)
+      setNewTrigger('')
+      setNewBoundary('')
+      // 延迟关闭模态框，让用户看到成功提示
+      setTimeout(() => {
+        setShowAddModal(false)
+        setAddSuccess(false)
+      }, 600)
+    } catch (e) {
+      console.error('[EvolutionPage] 添加记录失败', e)
+      setAddError(e instanceof Error ? e.message : String(e))
+    }
   }
 
   return (
@@ -436,16 +450,27 @@ export function EvolutionPage() {
                     className="input-base text-sm"
                   />
                 </div>
+                {addError && (
+                  <div className="text-xs p-2 rounded bg-accent-rose/10 text-accent-rose border border-accent-rose/30">
+                    添加失败：{addError}
+                  </div>
+                )}
+                {addSuccess && (
+                  <div className="text-xs p-2 rounded bg-accent-emerald/10 text-accent-emerald border border-accent-emerald/30 flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    记录已添加，正在关闭...
+                  </div>
+                )}
               </div>
               <div className="flex gap-2 p-4 border-t border-border-subtle">
-                <button onClick={() => setShowAddModal(false)} className="btn-ghost flex-1 text-sm">取消</button>
+                <button onClick={() => { setShowAddModal(false); setAddError(null); setAddSuccess(false) }} className="btn-ghost flex-1 text-sm">取消</button>
                 <button
                   onClick={handleAddRecord}
-                  disabled={!newTrigger.trim() || !newBoundary.trim()}
+                  disabled={!newTrigger.trim() || !newBoundary.trim() || addSuccess}
                   className="btn-primary flex-1 text-sm disabled:opacity-40"
                 >
                   <Plus className="w-4 h-4" />
-                  添加记录
+                  {addSuccess ? '已添加' : '添加记录'}
                 </button>
               </div>
             </motion.div>

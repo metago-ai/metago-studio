@@ -11,21 +11,29 @@ import type { DecisionLockRecord } from '../types'
 const SAMPLE_INPUTS = [
   {
     label: 'SQL 注入风险',
+    expected: '✅ 应通过',
+    expectedColor: 'text-accent-emerald',
     user: '请审查这段代码的安全性',
     output: '因为这段代码直接拼接用户输入到 SQL 查询中，所以存在 SQL 注入风险。首先应使用参数化查询，其次应校验输入类型，最后限制查询权限。建议改用 prepared statement。',
   },
   {
     label: '占位符幻觉',
+    expected: '❌ 应阻断（OSG 占位符）',
+    expectedColor: 'text-accent-rose',
     user: '请生成一个 React 组件',
     output: '这是一个 React 组件：\n\nfunction MyComponent() {\n  return <div>${variable}</div>\n}\n\n请替换 variable 为你的实际变量名。[TODO: 添加样式]',
   },
   {
     label: '伪造数据',
+    expected: '❌ 应阻断（OSG 伪造数据）',
+    expectedColor: 'text-accent-rose',
     user: '请分析这个产品的市场表现',
     output: '根据调查数据显示，该产品有 85%的提升，用户满意度达到 99.99%，100%保证了安全性。据统计，市场占有率增长了 3.5 倍。',
   },
   {
     label: '完整输出',
+    expected: '✅ 应通过',
+    expectedColor: 'text-accent-emerald',
     user: '请解释什么是决策锁',
     output: '决策锁是 MetaGO 的核心机制。首先，它通过四道关卡校验 AI 输出：意图验证(IVL)、意图谱系追踪(ILT)、语义输出门(OSG)、完整性校验。其次，每道关卡都有明确的通过条件和失败处理。因此，决策锁能有效杜绝幻觉输出。最后，未通过的输出会被阻断并触发元进化循环，让 AI 从错误中学习。',
   },
@@ -159,14 +167,16 @@ export function DecisionLockPage() {
         </div>
         <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-zinc-500">示例：</span>
+            <span className="text-xs text-zinc-500">示例（点击载入）：</span>
             {SAMPLE_INPUTS.map((s, i) => (
               <button
                 key={i}
                 onClick={() => loadSample(i)}
-                className="text-xs px-2 py-1 rounded bg-bg-elevated text-zinc-400 hover:text-accent-emerald hover:bg-bg-hover transition-colors"
+                title={s.expected}
+                className="text-xs px-2 py-1 rounded bg-bg-elevated text-zinc-400 hover:text-accent-emerald hover:bg-bg-hover transition-colors flex items-center gap-1.5"
               >
-                {s.label}
+                <span>{s.label}</span>
+                <span className={`text-[9px] ${s.expectedColor}`}>{s.expected}</span>
               </button>
             ))}
           </div>
