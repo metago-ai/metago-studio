@@ -116,20 +116,19 @@ export function addPrivateSkill(
   description: string,
   content: string,
   password: string,
-  tags: string[] = []
+  tags: string[] = [],
+  onEncrypted?: (skill: PrivateSkill) => void
 ): { success: boolean; message: string; skill?: PrivateSkill } {
   const skills = loadPrivateSkills()
   if (skills.length >= MAX_SKILLS) {
     return { success: false, message: `已达上限 ${MAX_SKILLS} 个私有技能` }
   }
-  // 同步加密（实际应异步，这里简化处理）
-  // 注意：实际使用时需 await encryptContent，这里返回同步占位
   const skill: PrivateSkill = {
     id: `ps_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     name,
     description,
-    content: '', // 加密成功后清空明文（零知识架构）
-    encryptedContent: '', // 异步填充
+    content: '',
+    encryptedContent: '',
     tags,
     version: 1,
     createdAt: new Date().toISOString(),
@@ -138,17 +137,14 @@ export function addPrivateSkill(
   }
   skills.unshift(skill)
   savePrivateSkills(skills)
-  // 异步加密（不阻塞 UI）
   encryptContent(content, password).then(encrypted => {
     skill.encryptedContent = encrypted
-    // 加密成功后清除明文（保证零知识架构）
     skill.content = ''
-    // 同时清除历史版本中的明文（仅保留加密后的状态标记）
     skill.history = skill.history.map(h => ({ ...h, content: '' }))
     savePrivateSkills(skills)
+    if (onEncrypted) onEncrypted(skill)
   }).catch(e => {
     console.error('[privateSkills] 加密失败', e)
-    // 加密失败：回滚（删除未成功加密的技能）
     const remaining = loadPrivateSkills().filter(s => s.id !== skill.id)
     savePrivateSkills(remaining)
   })

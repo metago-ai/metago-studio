@@ -4,6 +4,7 @@ import {
   Crown, Lock, Settings as SettingsIcon, ExternalLink,
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { UserMenu } from './UserMenu'
 
 const NAV_ITEMS = [
   { to: '/', label: '首页', icon: LayoutDashboard, end: true },
@@ -45,12 +46,6 @@ export function Header() {
             <h1 className="text-sm sm:text-base font-semibold text-zinc-100 leading-tight truncate">
               MetaGO Studio
             </h1>
-            <span
-              title="此页面为产品演示原型，非完整 SaaS。数据存储于本地浏览器，无账号系统。"
-              className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-700/50 text-zinc-400 border border-border-subtle whitespace-nowrap"
-            >
-              演示原型
-            </span>
           </div>
           <p className="text-[11px] text-zinc-500 leading-tight truncate">
             元构超级智能生命体可视化操作台
@@ -138,6 +133,9 @@ export function Header() {
           <ExternalLink className="w-3.5 h-3.5" />
           <span className="hidden md:inline">官网</span>
         </a>
+
+        {/* 用户菜单 */}
+        <UserMenu />
       </nav>
     </header>
   )

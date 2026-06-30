@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { HashRouter, Routes, Route } from 'react-router-dom'
 import { Header } from './components/Header'
 import { Dashboard } from './pages/Dashboard'
+import { AuthProvider } from './contexts/AuthContext'
 
 const SkillsPage = lazy(() => import('./pages/SkillsPage').then(m => ({ default: m.SkillsPage })))
 const DecisionLockPage = lazy(() => import('./pages/DecisionLockPage').then(m => ({ default: m.DecisionLockPage })))
@@ -11,6 +12,7 @@ const KitPage = lazy(() => import('./pages/KitPage').then(m => ({ default: m.Kit
 const ProUpgradePage = lazy(() => import('./pages/ProUpgradePage').then(m => ({ default: m.ProUpgradePage })))
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })))
 const PrivateSkillsPage = lazy(() => import('./pages/PrivateSkillsPage').then(m => ({ default: m.PrivateSkillsPage })))
+const AuthPage = lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })))
 
 function PageLoading() {
   return (
@@ -22,25 +24,28 @@ function PageLoading() {
 
 export default function App() {
   return (
-    <HashRouter>
-      <div className="h-screen flex flex-col bg-atmosphere overflow-hidden">
-        <Header />
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <Suspense fallback={<PageLoading />}>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/skills" element={<SkillsPage />} />
-              <Route path="/decision-lock" element={<DecisionLockPage />} />
-              <Route path="/evolution" element={<EvolutionPage />} />
-              <Route path="/templates" element={<TemplatesPage />} />
-              <Route path="/kit" element={<KitPage />} />
-              <Route path="/pro" element={<ProUpgradePage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/private-skills" element={<PrivateSkillsPage />} />
-            </Routes>
-          </Suspense>
-        </main>
-      </div>
-    </HashRouter>
+    <AuthProvider>
+      <HashRouter>
+        <div className="h-screen flex flex-col bg-atmosphere overflow-hidden">
+          <Header />
+          <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+            <Suspense fallback={<PageLoading />}>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/auth" element={<AuthPage />} />
+                <Route path="/skills" element={<SkillsPage />} />
+                <Route path="/decision-lock" element={<DecisionLockPage />} />
+                <Route path="/evolution" element={<EvolutionPage />} />
+                <Route path="/templates" element={<TemplatesPage />} />
+                <Route path="/kit" element={<KitPage />} />
+                <Route path="/pro" element={<ProUpgradePage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/private-skills" element={<PrivateSkillsPage />} />
+              </Routes>
+            </Suspense>
+          </main>
+        </div>
+      </HashRouter>
+    </AuthProvider>
   )
 }

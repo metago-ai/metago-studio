@@ -43,6 +43,14 @@ import {
   type PlatformInfo,
   type SyncLog,
 } from '../lib/crossPlatformSync'
+import {
+  loadAllFromCloud,
+  cloudSaveEvolutionRecord,
+  cloudDeleteEvolutionRecord,
+  cloudSaveDecisionLock,
+  cloudSavePrivateSkill,
+  cloudDeletePrivateSkill,
+} from '../lib/cloudSync'
 
 interface MetaGOStore {
   // 静态数据
@@ -111,6 +119,10 @@ interface MetaGOStore {
 
   // 活动
   addActivity: (activity: Activity) => void
+
+  // 云端同步
+  cloudUserId: string | null
+  setCloudUser: (userId: string | null) => Promise<void>
 }
 
 // 初始化时从 localStorage 加载真实数据（如果有），否则用 mock 数据
@@ -221,6 +233,8 @@ export const useStore = create<MetaGOStore>((set, get) => ({
       lockStats: stats,
       activities: [activity, ...get().activities].slice(0, 50),
     })
+    const uid = get().cloudUserId
+    if (uid) cloudSaveDecisionLock(uid, record).catch(() => {})
     return record
   },
   clearDecisionLockHistory: () => {
@@ -247,11 +261,15 @@ export const useStore = create<MetaGOStore>((set, get) => ({
       evolutionStats: stats,
       activities: [activity, ...get().activities].slice(0, 50),
     })
+    const uid = get().cloudUserId
+    if (uid) cloudSaveEvolutionRecord(uid, record).catch(() => {})
   },
   removeEvolutionRecord: (id) => {
     const records = removeRecordFromArchive(id)
     const stats = calculateEvolutionStats(records)
     set({ evolutionRecords: records, evolutionStats: stats })
+    const uid = get().cloudUserId
+    if (uid) cloudDeleteEvolutionRecord(uid, id).catch(() => {})
   },
   clearEvolutionRecords: () => {
     set({
@@ -262,7 +280,10 @@ export const useStore = create<MetaGOStore>((set, get) => ({
 
   // 私有技能操作
   addPrivateSkillAction: (name, description, content, password, tags = []) => {
-    const result = addPrivateSkill(name, description, content, password, tags)
+    const uid = get().cloudUserId
+    const result = addPrivateSkill(name, description, content, password, tags, uid ? (skill) => {
+      cloudSavePrivateSkill(uid, skill).catch(() => {})
+    } : undefined)
     if (result.success) {
       set({ privateSkills: loadPrivateSkills() })
     }
@@ -272,12 +293,20 @@ export const useStore = create<MetaGOStore>((set, get) => ({
     const result = updatePrivateSkill(id, content, password)
     if (result.success) {
       set({ privateSkills: loadPrivateSkills() })
+      const uid = get().cloudUserId
+      if (uid) {
+        const skills = loadPrivateSkills()
+        const updated = skills.find(s => s.id === id)
+        if (updated) cloudSavePrivateSkill(uid, updated).catch(() => {})
+      }
     }
     return { success: result.success, message: result.message }
   },
   removePrivateSkillAction: (id) => {
     removePrivateSkill(id)
     set({ privateSkills: loadPrivateSkills() })
+    const uid = get().cloudUserId
+    if (uid) cloudDeletePrivateSkill(uid, id).catch(() => {})
   },
   decryptViewAction: async (id, password) => {
     const skills = loadPrivateSkills()
@@ -326,5 +355,26 @@ export const useStore = create<MetaGOStore>((set, get) => ({
   // 活动
   addActivity: (activity) => {
     set({ activities: [activity, ...get().activities].slice(0, 50) })
+  },
+
+  // 云端同步
+  cloudUserId: null,
+  setCloudUser: async (userId) => {
+    set({ cloudUserId: userId })
+    if (!userId) return
+    const cloud = await loadAllFromCloud(userId)
+    set({
+      evolutionRecords: cloud.evolutionRecords.length > 0 ? cloud.evolutionRecords : get().evolutionRecords,
+      evolutionStats: cloud.evolutionRecords.length > 0
+        ? calculateEvolutionStats(cloud.evolutionRecords)
+        : get().evolutionStats,
+      decisionLockHistory: cloud.decisionLocks.length > 0 ? cloud.decisionLocks : get().decisionLockHistory,
+      lockStats: cloud.decisionLocks.length > 0
+        ? calculateLockStats(cloud.decisionLocks)
+        : get().lockStats,
+      privateSkills: cloud.privateSkills.length > 0 ? cloud.privateSkills : get().privateSkills,
+      platforms: cloud.platforms ?? get().platforms,
+      syncLogs: cloud.syncLogs ?? get().syncLogs,
+    })
   },
 }))
