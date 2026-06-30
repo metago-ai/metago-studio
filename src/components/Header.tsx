@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Sparkles, Shield, Dna, Play, Package,
-  Crown, Lock, Settings as SettingsIcon,
+  Crown, Lock, Settings as SettingsIcon, ExternalLink,
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 
@@ -13,6 +13,8 @@ const NAV_ITEMS = [
   { to: '/templates', label: '模板', icon: Play, end: false },
   { to: '/kit', label: 'Kit', icon: Package, end: false },
 ]
+
+const OFFICIAL_WEBSITE_URL = 'https://metago-ai.github.io/metago-website/'
 
 export function Header() {
   const { tier, trialDaysRemaining } = useStore()
@@ -39,9 +41,17 @@ export function Header() {
           />
         </div>
         <div className="min-w-0 hidden sm:block">
-          <h1 className="text-sm sm:text-base font-semibold text-zinc-100 leading-tight truncate">
-            MetaGO Studio
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm sm:text-base font-semibold text-zinc-100 leading-tight truncate">
+              MetaGO Studio
+            </h1>
+            <span
+              title="此页面为产品演示原型，非完整 SaaS。数据存储于本地浏览器，无账号系统。"
+              className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-700/50 text-zinc-400 border border-border-subtle whitespace-nowrap"
+            >
+              演示原型
+            </span>
+          </div>
           <p className="text-[11px] text-zinc-500 leading-tight truncate">
             元构超级智能生命体可视化操作台
           </p>
@@ -116,7 +126,20 @@ export function Header() {
         >
           <SettingsIcon className="w-3.5 h-3.5" />
         </NavLink>
+
+        {/* 返回官网 */}
+        <a
+          href={OFFICIAL_WEBSITE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap text-zinc-500 hover:text-accent-blue hover:bg-bg-hover border border-transparent"
+          title="返回 MetaGO 官网"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          <span className="hidden md:inline">官网</span>
+        </a>
       </nav>
     </header>
   )
 }
+

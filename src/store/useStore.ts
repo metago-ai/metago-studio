@@ -6,8 +6,8 @@ import { SCENE_TEMPLATES } from '../data/templates'
 import { SKILLS } from '../data/skills'
 import {
   loadRecords as loadEvolutionRecords,
-  addRecord as addEvolutionRecord,
-  removeRecord as removeEvolutionRecord,
+  addRecord as addRecordToArchive,
+  removeRecord as removeRecordFromArchive,
   calculateStats as calculateEvolutionStats,
 } from '../lib/evolutionArchive'
 import {
@@ -32,6 +32,7 @@ import {
   addPrivateSkill,
   updatePrivateSkill,
   removePrivateSkill,
+  decryptContent,
   type PrivateSkill,
 } from '../lib/privateSkills'
 import {
@@ -102,6 +103,7 @@ interface MetaGOStore {
   ) => { success: boolean; message: string }
   updatePrivateSkillAction: (id: string, content: string, password: string) => { success: boolean; message: string }
   removePrivateSkillAction: (id: string) => void
+  decryptViewAction: (id: string, password: string) => Promise<{ success: boolean; message: string; content?: string }>
 
   // 同步操作
   syncPlatform: (id: import('../lib/crossPlatformSync').PlatformId, localCount: number) => Promise<void>
@@ -230,7 +232,7 @@ export const useStore = create<MetaGOStore>((set, get) => ({
 
   // 进化操作
   addEvolutionRecord: (record) => {
-    const records = addEvolutionRecord(record)
+    const records = addRecordToArchive(record)
     const stats = calculateEvolutionStats(records)
     const activity: Activity = {
       id: `act_${Date.now()}`,
@@ -247,7 +249,7 @@ export const useStore = create<MetaGOStore>((set, get) => ({
     })
   },
   removeEvolutionRecord: (id) => {
-    const records = removeEvolutionRecord(id)
+    const records = removeRecordFromArchive(id)
     const stats = calculateEvolutionStats(records)
     set({ evolutionRecords: records, evolutionStats: stats })
   },
@@ -276,6 +278,21 @@ export const useStore = create<MetaGOStore>((set, get) => ({
   removePrivateSkillAction: (id) => {
     removePrivateSkill(id)
     set({ privateSkills: loadPrivateSkills() })
+  },
+  decryptViewAction: async (id, password) => {
+    const skills = loadPrivateSkills()
+    const skill = skills.find(s => s.id === id)
+    if (!skill) return { success: false, message: '技能不存在' }
+    if (!skill.encryptedContent) {
+      // 加密尚未完成（异步加密中）或数据损坏
+      return { success: false, message: '加密内容尚未就绪，请稍后再试' }
+    }
+    try {
+      const content = await decryptContent(skill.encryptedContent, password)
+      return { success: true, message: '解密成功', content }
+    } catch {
+      return { success: false, message: '口令错误，无法解密' }
+    }
   },
 
   // 同步操作

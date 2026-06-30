@@ -128,7 +128,7 @@ export function addPrivateSkill(
     id: `ps_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     name,
     description,
-    content, // 明文存储（演示用）
+    content: '', // 加密成功后清空明文（零知识架构）
     encryptedContent: '', // 异步填充
     tags,
     version: 1,
@@ -141,8 +141,17 @@ export function addPrivateSkill(
   // 异步加密（不阻塞 UI）
   encryptContent(content, password).then(encrypted => {
     skill.encryptedContent = encrypted
+    // 加密成功后清除明文（保证零知识架构）
+    skill.content = ''
+    // 同时清除历史版本中的明文（仅保留加密后的状态标记）
+    skill.history = skill.history.map(h => ({ ...h, content: '' }))
     savePrivateSkills(skills)
-  }).catch(e => console.error('[privateSkills] 加密失败', e))
+  }).catch(e => {
+    console.error('[privateSkills] 加密失败', e)
+    // 加密失败：回滚（删除未成功加密的技能）
+    const remaining = loadPrivateSkills().filter(s => s.id !== skill.id)
+    savePrivateSkills(remaining)
+  })
   return { success: true, message: '私有技能已添加', skill }
 }
 
@@ -156,9 +165,9 @@ export function updatePrivateSkill(
   const skill = skills.find(s => s.id === id)
   if (!skill) return { success: false, message: '技能不存在' }
   skill.version += 1
-  skill.content = content
+  skill.content = ''
   skill.updatedAt = new Date().toISOString()
-  skill.history.push({ version: skill.version, content, updatedAt: skill.updatedAt })
+  skill.history.push({ version: skill.version, content: '', updatedAt: skill.updatedAt })
   // 保留最多 10 个版本
   if (skill.history.length > MAX_HISTORY) {
     skill.history = skill.history.slice(-MAX_HISTORY)
@@ -167,8 +176,16 @@ export function updatePrivateSkill(
   // 异步更新加密
   encryptContent(content, password).then(encrypted => {
     skill.encryptedContent = encrypted
+    skill.content = ''
+    skill.history = skill.history.map(h => ({ ...h, content: '' }))
     savePrivateSkills(skills)
-  }).catch(e => console.error('[privateSkills] 加密失败', e))
+  }).catch(e => {
+    console.error('[privateSkills] 加密失败', e)
+    // 加密失败：版本回滚
+    skill.version -= 1
+    if (skill.history.length > 0) skill.history.pop()
+    savePrivateSkills(skills)
+  })
   return { success: true, message: `已更新到版本 ${skill.version}` }
 }
 

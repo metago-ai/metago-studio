@@ -1,13 +1,27 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Lock, Plus, FileText, Trash2, Edit3, X, Save, Eye, EyeOff } from 'lucide-react'
+import { Lock, Plus, FileText, Trash2, Edit3, X, Save, Eye, EyeOff, ShieldCheck, AlertCircle } from 'lucide-react'
 import { useStore } from '../store/useStore'
 
 export function PrivateSkillsPage() {
-  const { privateSkills, features, addPrivateSkillAction, updatePrivateSkillAction, removePrivateSkillAction } = useStore()
+  const {
+    privateSkills,
+    features,
+    addPrivateSkillAction,
+    updatePrivateSkillAction,
+    removePrivateSkillAction,
+    decryptViewAction,
+  } = useStore()
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [viewingId, setViewingId] = useState<string | null>(null)
+
+  // 解密查看状态
+  const [viewingSkill, setViewingSkill] = useState<{ id: string; name: string } | null>(null)
+  const [viewPassword, setViewPassword] = useState('')
+  const [viewShowPassword, setViewShowPassword] = useState(false)
+  const [decryptedContent, setDecryptedContent] = useState<string | null>(null)
+  const [viewMessage, setViewMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [isDecrypting, setIsDecrypting] = useState(false)
 
   // 表单状态
   const [name, setName] = useState('')
@@ -29,6 +43,15 @@ export function PrivateSkillsPage() {
     setEditingId(null)
   }
 
+  const resetView = () => {
+    setViewingSkill(null)
+    setViewPassword('')
+    setViewShowPassword(false)
+    setDecryptedContent(null)
+    setViewMessage(null)
+    setIsDecrypting(false)
+  }
+
   const handleSave = () => {
     if (!name.trim() || !content.trim() || !password.trim()) {
       setMessage({ type: 'error', text: '请填写名称、内容和加密口令' })
@@ -42,22 +65,21 @@ export function PrivateSkillsPage() {
       const result = addPrivateSkillAction(name, description, content, password, tagList)
       setMessage({ type: result.success ? 'success' : 'error', text: result.message })
     }
-    if (message?.type === 'success' || true) {
-      setTimeout(() => {
-        setShowAddModal(false)
-        resetForm()
-        setMessage(null)
-      }, 1200)
-    }
+    setTimeout(() => {
+      setShowAddModal(false)
+      resetForm()
+      setMessage(null)
+    }, 1200)
   }
 
   const handleEdit = (id: string) => {
     const skill = privateSkills.find(s => s.id === id)
     if (!skill) return
+    // 编辑时清空原内容（要求用户重新输入，因为明文已被加密清除）
     setEditingId(id)
     setName(skill.name)
     setDescription(skill.description)
-    setContent(skill.content)
+    setContent('')
     setTags(skill.tags.join(', '))
     setPassword('')
     setShowAddModal(true)
@@ -67,6 +89,36 @@ export function PrivateSkillsPage() {
   const handleDelete = (id: string) => {
     if (confirm('确定删除此私有技能？此操作不可撤销。')) {
       removePrivateSkillAction(id)
+    }
+  }
+
+  // 解密查看
+  const handleView = (id: string) => {
+    const skill = privateSkills.find(s => s.id === id)
+    if (!skill) return
+    resetView()
+    setViewingSkill({ id, name: skill.name })
+  }
+
+  const handleDecrypt = async () => {
+    if (!viewingSkill || !viewPassword.trim()) {
+      setViewMessage({ type: 'error', text: '请输入加密口令' })
+      return
+    }
+    setIsDecrypting(true)
+    setViewMessage(null)
+    try {
+      const result = await decryptViewAction(viewingSkill.id, viewPassword)
+      if (result.success && result.content) {
+        setDecryptedContent(result.content)
+        setViewMessage({ type: 'success', text: '解密成功' })
+      } else {
+        setViewMessage({ type: 'error', text: result.message })
+      }
+    } catch {
+      setViewMessage({ type: 'error', text: '解密失败：口令错误或数据损坏' })
+    } finally {
+      setIsDecrypting(false)
     }
   }
 
@@ -118,6 +170,21 @@ export function PrivateSkillsPage() {
         </button>
       </motion.div>
 
+      {/* 说明条 — 解释加密机制（回应用户疑问）*/}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.05 }}
+        className="card-base p-3 flex items-start gap-2 text-xs text-zinc-400"
+      >
+        <ShieldCheck className="w-4 h-4 text-accent-emerald flex-shrink-0 mt-0.5" />
+        <div>
+          <span className="text-zinc-300 font-medium">加密机制说明：</span>
+          保存时使用 AES-GCM 256 + PBKDF2 加密内容，<span className="text-accent-amber">明文会立即从存储中清除</span>。
+          查看时必须输入当初设置的口令才能解密。口令不会存储，<span className="text-accent-rose">忘记口令将无法找回内容</span>。
+        </div>
+      </motion.div>
+
       {/* 统计 */}
       <div className="grid grid-cols-3 gap-3">
         <div className="card-base p-3 text-center">
@@ -147,78 +214,75 @@ export function PrivateSkillsPage() {
         </motion.div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {privateSkills.map(skill => (
-            <motion.div
-              key={skill.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="card-base p-4 hover:border-accent-emerald/40 transition-colors"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Lock className="w-3.5 h-3.5 text-accent-emerald flex-shrink-0" />
-                    <h3 className="text-sm font-medium text-zinc-100 truncate">{skill.name}</h3>
+          {privateSkills.map(skill => {
+            const isEncrypted = !!skill.encryptedContent
+            return (
+              <motion.div
+                key={skill.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="card-base p-4 hover:border-accent-emerald/40 transition-colors"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-3.5 h-3.5 text-accent-emerald flex-shrink-0" />
+                      <h3 className="text-sm font-medium text-zinc-100 truncate">{skill.name}</h3>
+                      {isEncrypted ? (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-accent-emerald/10 text-accent-emerald flex items-center gap-0.5">
+                          <ShieldCheck className="w-2.5 h-2.5" />
+                          已加密
+                        </span>
+                      ) : (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-accent-amber/10 text-accent-amber">
+                          加密中...
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{skill.description || '无描述'}</p>
                   </div>
-                  <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{skill.description || '无描述'}</p>
+                  <div className="flex gap-1 ml-2">
+                    <button
+                      onClick={() => handleEdit(skill.id)}
+                      className="p-1.5 rounded hover:bg-bg-hover text-zinc-400 hover:text-accent-emerald"
+                      title="编辑（需重新输入内容和口令）"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleView(skill.id)}
+                      className="p-1.5 rounded hover:bg-bg-hover text-zinc-400 hover:text-accent-blue"
+                      title="解密查看"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(skill.id)}
+                      className="p-1.5 rounded hover:bg-bg-hover text-zinc-400 hover:text-accent-rose"
+                      title="删除"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-1 ml-2">
-                  <button
-                    onClick={() => handleEdit(skill.id)}
-                    className="p-1.5 rounded hover:bg-bg-hover text-zinc-400 hover:text-accent-emerald"
-                    title="编辑"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setViewingId(viewingId === skill.id ? null : skill.id)}
-                    className="p-1.5 rounded hover:bg-bg-hover text-zinc-400 hover:text-accent-blue"
-                    title="查看"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(skill.id)}
-                    className="p-1.5 rounded hover:bg-bg-hover text-zinc-400 hover:text-accent-rose"
-                    title="删除"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
 
-              {skill.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {skill.tags.map(tag => (
-                    <span key={tag} className="px-1.5 py-0.5 rounded bg-bg-elevated text-[10px] text-zinc-400">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-center justify-between mt-3 pt-2 border-t border-border-subtle text-[10px] text-zinc-500">
-                <span>v{skill.version} · {skill.history.length} 版本</span>
-                <span>{skill.updatedAt.slice(0, 10)}</span>
-              </div>
-
-              {/* 查看内容 */}
-              <AnimatePresence>
-                {viewingId === skill.id && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <pre className="mt-2 p-2 bg-bg-deep/60 rounded text-[11px] text-zinc-400 max-h-48 overflow-y-auto code-block">
-                      {skill.content}
-                    </pre>
-                  </motion.div>
+                {skill.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {skill.tags.map(tag => (
+                      <span key={tag} className="px-1.5 py-0.5 rounded bg-bg-elevated text-[10px] text-zinc-400">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
+
+                <div className="flex items-center justify-between mt-3 pt-2 border-t border-border-subtle text-[10px] text-zinc-500">
+                  <span>v{skill.version} · {skill.history.length} 版本</span>
+                  <span>{skill.updatedAt.slice(0, 10)}</span>
+                </div>
+              </motion.div>
+            )
+          })}
         </div>
       )}
 
@@ -272,7 +336,9 @@ export function PrivateSkillsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-zinc-500 mb-1 block">SKILL.md 内容 *</label>
+                  <label className="text-xs text-zinc-500 mb-1 block">
+                    SKILL.md 内容 {editingId && '*（重新输入，原内容已加密）'}
+                  </label>
                   <textarea
                     value={content}
                     onChange={e => setContent(e.target.value)}
@@ -292,7 +358,9 @@ export function PrivateSkillsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-zinc-500 mb-1 block">加密口令 *</label>
+                  <label className="text-xs text-zinc-500 mb-1 block">
+                    加密口令 {editingId && '*（重新输入）'}
+                  </label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
@@ -338,6 +406,114 @@ export function PrivateSkillsPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 解密查看模态框 */}
+      <AnimatePresence>
+        {viewingSkill && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-bg-deep/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={resetView}
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-bg-card border border-border-default rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between p-4 border-b border-border-subtle">
+                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-accent-emerald" />
+                  解密查看：{viewingSkill.name}
+                </h3>
+                <button onClick={resetView} className="text-zinc-400 hover:text-zinc-200">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-3">
+                {/* 输入口令区 */}
+                {decryptedContent === null && (
+                  <>
+                    <div className="text-xs text-zinc-400 p-3 rounded bg-bg-elevated/50 border border-border-subtle flex items-start gap-2">
+                      <AlertCircle className="w-3.5 h-3.5 text-accent-amber flex-shrink-0 mt-0.5" />
+                      <span>
+                        此技能已加密存储。请输入当初设置的口令以解密查看。口令不会存储，仅本次会话使用。
+                      </span>
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-500 mb-1 block">加密口令 *</label>
+                      <div className="relative">
+                        <input
+                          type={viewShowPassword ? 'text' : 'password'}
+                          value={viewPassword}
+                          onChange={e => setViewPassword(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleDecrypt() }}
+                          placeholder="输入口令以解密"
+                          className="input-base pr-10"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setViewShowPassword(!viewShowPassword)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200"
+                        >
+                          {viewShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    {viewMessage && (
+                      <div className={`text-xs p-2 rounded ${viewMessage.type === 'success' ? 'bg-accent-emerald/10 text-accent-emerald' : 'bg-accent-rose/10 text-accent-rose'}`}>
+                        {viewMessage.text}
+                      </div>
+                    )}
+                    <div className="flex gap-2 pt-2">
+                      <button onClick={resetView} className="btn-ghost flex-1 text-sm">
+                        取消
+                      </button>
+                      <button
+                        onClick={handleDecrypt}
+                        disabled={isDecrypting || !viewPassword.trim()}
+                        className="btn-primary flex-1 text-sm disabled:opacity-40"
+                      >
+                        <Eye className="w-4 h-4" />
+                        {isDecrypting ? '解密中...' : '解密查看'}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {/* 解密后的内容 */}
+                {decryptedContent !== null && (
+                  <>
+                    {viewMessage && (
+                      <div className="text-xs p-2 rounded bg-accent-emerald/10 text-accent-emerald flex items-center gap-2">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        {viewMessage.text} · 关闭后将重新加密
+                      </div>
+                    )}
+                    <div>
+                      <label className="text-xs text-zinc-500 mb-1 block">解密后的 SKILL.md 内容</label>
+                      <pre className="p-3 bg-bg-deep/60 rounded text-xs text-zinc-300 max-h-[400px] overflow-y-auto code-block whitespace-pre-wrap break-all">
+                        {decryptedContent}
+                      </pre>
+                    </div>
+                    <div className="flex justify-end pt-2">
+                      <button onClick={resetView} className="btn-ghost text-sm">
+                        关闭（重新加密）
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
+

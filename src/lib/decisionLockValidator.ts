@@ -70,6 +70,14 @@ const INTENT_DRIFT_KEYWORDS = [
   'by the way', 'BTW', 'in addition', 'additionally',
 ]
 
+/** 中文停用字（用于过滤无意义子串） */
+const STOP_CHARS = new Set([
+  '的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一',
+  '上', '也', '很', '到', '说', '要', '去', '你', '会', '着', '没', '看',
+  '好', '请', '什', '么', '为', '吗', '呢', '吧', '啊', '哦', '嗯', '这',
+  '那', '它', '他', '她', '们', '个', '把', '被', '让', '使', '给', '对',
+])
+
 // ============ 关卡实现 ============
 
 export interface ValidationInput {
@@ -96,10 +104,10 @@ export interface StageResult {
 function validateIVL(input: ValidationInput): StageResult {
   const start = performance.now()
   const userKeywords = extractKeywords(input.userInput)
-  const outputKeywords = extractKeywords(input.aiOutput)
 
-  // 意图重叠度 = 用户关键词在输出中出现的比例
-  const matched = userKeywords.filter(k => outputKeywords.includes(k))
+  // 意图重叠度 = 用户关键词在输出文本中出现的比例
+  const outputLower = input.aiOutput.toLowerCase()
+  const matched = userKeywords.filter(k => outputLower.includes(k.toLowerCase()))
   const overlap = userKeywords.length > 0 ? matched.length / userKeywords.length : 0
 
   // 意图偏移检测：输出中是否包含大量无关话题词
@@ -107,8 +115,8 @@ function validateIVL(input: ValidationInput): StageResult {
     input.aiOutput.toLowerCase().includes(k.toLowerCase())
   )
 
-  // 通过条件：重叠度 >= 0.4 且偏移词 <= 2
-  const passed = overlap >= 0.4 && driftHits.length <= 2
+  // 通过条件：重叠度 >= 0.3 且偏移词 <= 2
+  const passed = overlap >= 0.3 && driftHits.length <= 2
 
   return {
     stage: 'ivl',
@@ -120,7 +128,7 @@ function validateIVL(input: ValidationInput): StageResult {
     details: [
       { label: '用户意图关键词数', value: `${userKeywords.length}`, ok: userKeywords.length > 0 },
       { label: '输出命中关键词数', value: `${matched.length}`, ok: matched.length > 0 },
-      { label: '意图重叠度', value: `${(overlap * 100).toFixed(1)}%`, ok: overlap >= 0.4 },
+      { label: '意图重叠度', value: `${(overlap * 100).toFixed(1)}%`, ok: overlap >= 0.3 },
       { label: '偏移触发词数', value: `${driftHits.length}`, ok: driftHits.length <= 2 },
     ],
     blockReason: passed ? undefined : `意图偏移 ${((1 - overlap) * 100).toFixed(0)}%（重叠度 ${overlap.toFixed(2)}，偏移词 ${driftHits.length}）`,
@@ -268,23 +276,51 @@ function validateCompleteness(input: ValidationInput): StageResult {
 
 // ============ 工具函数 ============
 
-/** 提取文本关键词（简单分词 + 去停用词） */
+/** 英文停用词 */
+const STOP_WORDS = new Set([
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'to', 'of', 'in', 'on', 'at', 'by', 'for', 'with', 'about', 'against',
+  'and', 'or', 'but', 'not', 'no', 'yes', 'this', 'that', 'these', 'those',
+  'it', 'he', 'she', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
+])
+
+/** 提取文本关键词（中英文混合分词） */
 function extractKeywords(text: string): string[] {
   if (!text || text.trim().length === 0) return []
-  const stopWords = new Set([
-    '的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一', '一个',
-    '上', '也', '很', '到', '说', '要', '去', '你', '会', '着', '没有', '看', '好',
-    'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-    'to', 'of', 'in', 'on', 'at', 'by', 'for', 'with', 'about', 'against',
-    'and', 'or', 'but', 'not', 'no', 'yes', 'this', 'that', 'these', 'those',
-  ])
-  // 简单分词：中英文混合
-  const tokens = text
-    .toLowerCase()
-    .split(/[\s,.;:!?，。；：！？、（）()\[\]{}'"]+/)
-    .filter(t => t.length >= 2 && !stopWords.has(t))
-  // 去重
-  return [...new Set(tokens)]
+
+  const keywords = new Set<string>()
+
+  // 提取英文单词（>= 2 字符，非停用词）
+  const englishWords = text.match(/[a-z]{2,}/gi) || []
+  for (const w of englishWords) {
+    const lower = w.toLowerCase()
+    if (!STOP_WORDS.has(lower)) {
+      keywords.add(lower)
+    }
+  }
+
+  // 提取中文子串
+  const chineseSegments = text.match(/[\u4e00-\u9fa5]+/g) || []
+  for (const seg of chineseSegments) {
+    if (seg.length <= 4) {
+      // 短段直接作为关键词（过滤全为停用字的段）
+      if (!Array.from(seg).every(c => STOP_CHARS.has(c))) {
+        keywords.add(seg)
+      }
+    } else {
+      // 长段提取 2-3 字子串（过滤含停用字的子串）
+      for (let len = 3; len >= 2; len--) {
+        for (let i = 0; i <= seg.length - len; i++) {
+          const sub = seg.substring(i, i + len)
+          if (!Array.from(sub).some(c => STOP_CHARS.has(c))) {
+            keywords.add(sub)
+          }
+        }
+      }
+    }
+  }
+
+  return Array.from(keywords)
 }
 
 // ============ 主入口 ============

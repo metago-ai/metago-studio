@@ -182,15 +182,30 @@ export async function syncWithPlatform(
   return { success: true, logs, platforms }
 }
 
-/** 同步所有已连接平台 */
+/**
+ * 同步所有平台
+ *
+ * 行为：自动连接所有未连接平台，然后逐一同步。
+ * 设计意图：用户点击"同步所有平台"时，期望所有平台状态都会更新，
+ * 而不是只同步已经连接的平台（这会让用户困惑——按钮点击后看似无反应）。
+ */
 export async function syncAllPlatforms(
   localRecordCount: number
 ): Promise<{ logs: SyncLog[]; platforms: PlatformInfo[] }> {
   const platforms = loadPlatforms()
-  const connected = platforms.filter(p => p.status === 'connected')
+  // 自动连接所有未连接的平台（"同步所有平台"应触发全平台状态联动）
+  for (const p of platforms) {
+    if (p.status === 'disconnected') {
+      p.status = 'connected'
+    }
+  }
+  savePlatforms(platforms)
+
   let allLogs = loadSyncLogs()
   let currentPlatforms = platforms
-  for (const p of connected) {
+  for (const p of platforms) {
+    // 跳过错误状态平台（避免反复尝试失败的平台）
+    if (p.status === 'error') continue
     const result = await syncWithPlatform(p.id, localRecordCount)
     allLogs = result.logs
     currentPlatforms = result.platforms
