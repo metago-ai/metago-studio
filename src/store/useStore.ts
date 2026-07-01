@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import type { DecisionLockRecord, EvolutionRecord, Activity } from '../types'
-import { EVOLUTION_STATS, EVOLUTION_RECORDS, RECENT_ACTIVITIES } from '../data/evolution'
-import { DECISION_LOCK_HISTORY } from '../data/decisionLock'
+import { EVOLUTION_STATS } from '../data/evolution'
 import { SCENE_TEMPLATES } from '../data/templates'
 import { SKILLS } from '../data/skills'
 import {
@@ -13,6 +12,8 @@ import {
 import {
   runDecisionLockValidation,
   calculateLockStats,
+  loadDecisionLockHistory,
+  saveDecisionLockHistory,
   type ValidationInput,
 } from '../lib/decisionLockValidator'
 import {
@@ -23,10 +24,17 @@ import {
   activatePro,
   deactivateLicense,
   getTrialDaysRemaining,
+  saveLicense,
   type LicenseInfo,
   type PlanTier,
   type FeatureFlags,
 } from '../lib/proGate'
+import {
+  getProfile,
+  startTrialCloud,
+  activateProCloud,
+  cancelSubscriptionCloud,
+} from '../lib/cloudFunctions'
 import {
   loadPrivateSkills,
   addPrivateSkill,
@@ -88,6 +96,7 @@ interface MetaGOStore {
 
   // Pro 操作
   refreshLicense: () => void
+  refreshFromCloud: () => Promise<void>
   startTrialAction: (email: string) => void
   activateProAction: (key: string, email: string) => { success: boolean; message: string }
   deactivate: () => void
@@ -123,13 +132,15 @@ interface MetaGOStore {
   // 云端同步
   cloudUserId: string | null
   setCloudUser: (userId: string | null) => Promise<void>
+
+  // 跨页面技能选中（从技能库跳转到Kit页面）
+  pendingKitSkillIds: string[]
+  setPendingKitSkillIds: (ids: string[]) => void
 }
 
-// 初始化时从 localStorage 加载真实数据（如果有），否则用 mock 数据
-const initialEvolutionRecords = loadEvolutionRecords().length > 0
-  ? loadEvolutionRecords()
-  : EVOLUTION_RECORDS
-const initialDecisionLockHistory = DECISION_LOCK_HISTORY // 决策锁历史默认用 mock（首次使用）
+// 初始化时从 localStorage 加载真实数据，新用户看到空状态（不使用 mock 数据）
+const initialEvolutionRecords = loadEvolutionRecords()
+const initialDecisionLockHistory = loadDecisionLockHistory()
 const initialLicense = loadLicense()
 const initialTier = getCurrentTier()
 const initialFeatures = getFeatureFlags()
@@ -157,10 +168,20 @@ export const useStore = create<MetaGOStore>((set, get) => ({
   evolutionRecords: initialEvolutionRecords,
   evolutionStats: initialEvolutionRecords.length > 0
     ? calculateEvolutionStats(initialEvolutionRecords)
-    : EVOLUTION_STATS,
+    : {
+        ...EVOLUTION_STATS,
+        totalEvolutions: 0,
+        last7Days: 0,
+        last30Days: 0,
+        last90Days: 0,
+        last365Days: 0,
+        successRate: 0,
+        averageDurationMs: 0,
+        dailyCounts: [],
+      },
 
-  // 活动
-  activities: RECENT_ACTIVITIES,
+  // 活动（新用户从空开始，只有真实操作才会产生活动）
+  activities: [],
 
   // 私有技能
   privateSkills: initialPrivateSkills,
@@ -183,6 +204,35 @@ export const useStore = create<MetaGOStore>((set, get) => ({
       trialDaysRemaining: getTrialDaysRemaining(),
     })
   },
+  refreshFromCloud: async () => {
+    const profile = await getProfile()
+    if (profile) {
+      const cloudTier = profile.tier
+      const localTier = getCurrentTier()
+      if (cloudTier !== localTier) {
+        if (cloudTier === 'free') {
+          deactivateLicense()
+        } else {
+          const info: LicenseInfo = {
+            tier: cloudTier,
+            email: profile.email,
+            licenseKey: profile.licenseKey,
+            activatedAt: profile.activatedAt ?? new Date().toISOString(),
+            expiresAt: profile.expiresAt,
+            trialStartedAt: profile.trialStartedAt,
+            seats: profile.seats,
+          }
+          saveLicense(info)
+        }
+        set({
+          license: loadLicense(),
+          tier: getCurrentTier(),
+          features: getFeatureFlags(),
+          trialDaysRemaining: getTrialDaysRemaining(),
+        })
+      }
+    }
+  },
   startTrialAction: (email) => {
     startTrial(email)
     set({
@@ -191,10 +241,30 @@ export const useStore = create<MetaGOStore>((set, get) => ({
       features: getFeatureFlags(),
       trialDaysRemaining: getTrialDaysRemaining(),
     })
+    startTrialCloud(email).then(res => {
+      if (res.success && res.profile) {
+        const info: LicenseInfo = {
+          tier: res.profile.tier,
+          email: res.profile.email,
+          licenseKey: res.profile.licenseKey,
+          activatedAt: res.profile.activatedAt ?? new Date().toISOString(),
+          expiresAt: res.profile.expiresAt,
+          trialStartedAt: res.profile.trialStartedAt,
+          seats: res.profile.seats,
+        }
+        saveLicense(info)
+        set({
+          license: info,
+          tier: res.profile.tier,
+          features: getFeatureFlags(),
+          trialDaysRemaining: getTrialDaysRemaining(),
+        })
+      }
+    }).catch(() => {})
   },
   activateProAction: (key, email) => {
-    const result = activatePro(key, email)
-    if (result.success) {
+    const localResult = activatePro(key, email)
+    if (localResult.success) {
       set({
         license: loadLicense(),
         tier: getCurrentTier(),
@@ -202,7 +272,27 @@ export const useStore = create<MetaGOStore>((set, get) => ({
         trialDaysRemaining: getTrialDaysRemaining(),
       })
     }
-    return { success: result.success, message: result.message }
+    activateProCloud(key, email).then(res => {
+      if (res.success && res.profile) {
+        const info: LicenseInfo = {
+          tier: res.profile.tier,
+          email: res.profile.email,
+          licenseKey: res.profile.licenseKey,
+          activatedAt: res.profile.activatedAt ?? new Date().toISOString(),
+          expiresAt: res.profile.expiresAt,
+          trialStartedAt: res.profile.trialStartedAt,
+          seats: res.profile.seats,
+        }
+        saveLicense(info)
+        set({
+          license: info,
+          tier: res.profile.tier,
+          features: getFeatureFlags(),
+          trialDaysRemaining: getTrialDaysRemaining(),
+        })
+      }
+    }).catch(() => {})
+    return { success: localResult.success, message: localResult.message }
   },
   deactivate: () => {
     deactivateLicense()
@@ -212,6 +302,7 @@ export const useStore = create<MetaGOStore>((set, get) => ({
       features: getFeatureFlags(),
       trialDaysRemaining: 0,
     })
+    cancelSubscriptionCloud().catch(() => {})
   },
 
   // 决策锁操作
@@ -219,6 +310,7 @@ export const useStore = create<MetaGOStore>((set, get) => ({
     const record = runDecisionLockValidation(input)
     const history = [record, ...get().decisionLockHistory].slice(0, 500)
     const stats = calculateLockStats(history)
+    saveDecisionLockHistory(history)
     // 添加活动日志
     const activity: Activity = {
       id: `act_${Date.now()}`,
@@ -238,6 +330,7 @@ export const useStore = create<MetaGOStore>((set, get) => ({
     return record
   },
   clearDecisionLockHistory: () => {
+    saveDecisionLockHistory([])
     set({
       decisionLockHistory: [],
       lockStats: calculateLockStats([]),
@@ -377,4 +470,7 @@ export const useStore = create<MetaGOStore>((set, get) => ({
       syncLogs: cloud.syncLogs ?? get().syncLogs,
     })
   },
+
+  pendingKitSkillIds: [],
+  setPendingKitSkillIds: (ids) => set({ pendingKitSkillIds: ids }),
 }))

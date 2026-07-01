@@ -43,6 +43,8 @@ export function TemplatesPage() {
     setRunResult(null)
     setCurrentStep(0)
 
+    // 场景模板目前为演示模式：展示执行流程，不调用真实引擎
+    // 后续版本将接入 @metago-ai/engine 云函数实现真实执行
     template.steps.forEach((_step, idx) => {
       setTimeout(() => {
         setCurrentStep(idx + 1)
@@ -82,6 +84,10 @@ export function TemplatesPage() {
         <p className="text-sm text-zinc-500 mt-1">
           6 个预设场景一键运行：代码审查 · 风险决策 · 元进化 · 合规检查 · 架构设计 · 数据溯源
         </p>
+        <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded bg-accent-amber/10 border border-accent-amber/30 text-accent-amber text-[10px]">
+          <Clock className="w-3 h-3" />
+          演示模式 · 后续版本接入真实引擎
+        </div>
       </motion.div>
 
       <motion.div
@@ -259,8 +265,11 @@ export function TemplatesPage() {
                     <p className="text-xs text-zinc-400">
                       场景「{runningTemplate.name}」已成功执行 {runningTemplate.steps.length} 个步骤。
                     </p>
-                    <button className="mt-3 btn-primary text-xs">
-                      查看完整报告
+                    <button
+                      onClick={closeRunner}
+                      className="mt-3 btn-primary text-xs"
+                    >
+                      关闭
                       <ArrowRight className="w-3 h-3" />
                     </button>
                   </motion.div>

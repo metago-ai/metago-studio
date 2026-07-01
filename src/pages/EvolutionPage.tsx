@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { exportAndDownloadJSON, exportAndDownloadMarkdown } from '../lib/evolutionArchive'
+import { ShareButton } from '../components/ShareButton'
 import type { EvolutionRecord } from '../types'
 
 const TIME_RANGES = [
@@ -115,6 +116,17 @@ export function EvolutionPage() {
             <Download className="w-3 h-3" />
             导出 Markdown
           </button>
+          {evolutionRecords.length > 0 && (
+            <ShareButton
+              data={{
+                title: `MetaGO 进化档案 · 共 ${evolutionStats.totalEvolutions} 次进化 · 成功率 ${evolutionStats.successRate.toFixed(1)}%`,
+                content: evolutionRecords.slice(0, 5).map(r =>
+                  `【${r.trigger}】边界：${r.boundary}；差距：${r.gap}；自生成：${r.generated}；${r.verified ? '✅验证通过' : '❌验证失败'}；耗时${r.durationMs}ms${r.recursed ? `；递归${r.depth}层` : ''}`
+                ).join('\n\n'),
+                type: 'evolution',
+              }}
+            />
+          )}
           {features.evolutionArchive && (
             <button
               onClick={() => setShowAddModal(true)}

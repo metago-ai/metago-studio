@@ -1,7 +1,9 @@
-import { useState, useMemo } from 'react'
-import { motion } from 'framer-motion'
-import { Search, Sparkles, Package, Eye, Download } from 'lucide-react'
+import { useState, useMemo, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
+import { Search, Sparkles, Package, Download, Check, Wand2, Terminal } from 'lucide-react'
 import { SKILLS } from '../data/skills'
+import { useStore } from '../store/useStore'
 import type { Skill } from '../types'
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -22,10 +24,20 @@ const TAG_COLORS: Record<string, string> = {
   安全: 'bg-accent-rose/10 text-accent-rose',
 }
 
+const LIFEFORM_INSTALL_CMD = 'irm https://gitee.com/metago/metagolifeform/raw/main/scripts/bootstrap-install.ps1 | iex'
+
+const CATEGORY_SCENARIOS: Record<string, string> = {
+  core: '作为 Lifeform Kit 内置能力，在 AI 对话中自动触发或由用户手动调用',
+  dev: '作为 Dev Kit 工程能力，在代码审查、架构设计、重构、安全审计场景中使用',
+}
+
 export function SkillsPage() {
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null)
+  const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
+  const navigate = useNavigate()
+  const setPendingKitSkillIds = useStore(s => s.setPendingKitSkillIds)
 
   const filteredSkills = useMemo(() => {
     return SKILLS.filter((skill) => {
@@ -38,6 +50,22 @@ export function SkillsPage() {
       return matchSearch && matchCategory
     })
   }, [search, activeCategory])
+
+  const handleGenerateKit = useCallback((skill: Skill) => {
+    setPendingKitSkillIds([skill.id])
+    setSelectedSkill(null)
+    navigate('/kit')
+  }, [navigate, setPendingKitSkillIds])
+
+  const handleCopyInstall = useCallback(async () => {
+    try {
+      await navigator.clipboard?.writeText(LIFEFORM_INSTALL_CMD)
+      setCopyState('copied')
+      setTimeout(() => setCopyState('idle'), 2000)
+    } catch {
+      setCopyState('idle')
+    }
+  }, [])
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -154,57 +182,96 @@ export function SkillsPage() {
         ))}
       </motion.div>
 
-      {selectedSkill && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={() => setSelectedSkill(null)}
-          className="fixed inset-0 bg-bg-deep/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        >
+      <AnimatePresence>
+        {selectedSkill && (
           <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            onClick={(e) => e.stopPropagation()}
-            className="card-base p-6 max-w-lg w-full"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedSkill(null)}
+            className="fixed inset-0 bg-bg-deep/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           >
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs font-mono text-accent-emerald">{selectedSkill.id}</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.5 rounded ${selectedSkill.category === 'core' ? 'bg-accent-emerald/10 text-accent-emerald' : 'bg-accent-blue/10 text-accent-blue'}`}
-              >
-                {CATEGORY_LABELS[selectedSkill.category]}
-              </span>
-            </div>
-            <h2 className="text-xl font-bold text-zinc-100 mb-2">{selectedSkill.title}</h2>
-            <p className="text-sm text-zinc-400 mb-4">{selectedSkill.detail}</p>
-            <div className="flex items-center gap-2 mb-4">
-              {selectedSkill.tags.map((tag) => (
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="card-base p-6 max-w-xl w-full max-h-[85vh] overflow-y-auto"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-mono text-accent-emerald">{selectedSkill.id}</span>
                 <span
-                  key={tag}
-                  className={`text-xs px-2 py-0.5 rounded ${TAG_COLORS[tag] || 'bg-bg-elevated text-zinc-500'}`}
+                  className={`text-[10px] px-1.5 py-0.5 rounded ${selectedSkill.category === 'core' ? 'bg-accent-emerald/10 text-accent-emerald' : 'bg-accent-blue/10 text-accent-blue'}`}
                 >
-                  {tag}
+                  {CATEGORY_LABELS[selectedSkill.category]}
                 </span>
-              ))}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-zinc-500 mb-4">
-              <Package className="w-3 h-3" />
-              预估大小：{(selectedSkill.estimatedSize / 1024).toFixed(2)} KB
-            </div>
-            <div className="flex gap-2">
-              <button className="btn-primary text-xs flex-1">
-                <Eye className="w-3 h-3" />
-                试用
-              </button>
-              <button className="btn-secondary text-xs">
-                <Download className="w-3 h-3" />
-                收藏
-              </button>
-            </div>
+              </div>
+
+              <h2 className="text-xl font-bold text-zinc-100 mb-2">{selectedSkill.title}</h2>
+              <p className="text-sm text-zinc-400 mb-4">{selectedSkill.detail}</p>
+
+              <div className="flex items-center gap-2 mb-4 flex-wrap">
+                {selectedSkill.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className={`text-xs px-2 py-0.5 rounded ${TAG_COLORS[tag] || 'bg-bg-elevated text-zinc-500'}`}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+
+              <div className="space-y-3 mb-5 text-xs">
+                <div className="flex items-center gap-2 text-zinc-500">
+                  <Package className="w-3 h-3 flex-shrink-0" />
+                  <span>预估大小：{(selectedSkill.estimatedSize / 1024).toFixed(2)} KB</span>
+                </div>
+                <div className="flex items-start gap-2 text-zinc-500">
+                  <Wand2 className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                  <span>使用场景：{CATEGORY_SCENARIOS[selectedSkill.category]}</span>
+                </div>
+              </div>
+
+              <div className="border-t border-zinc-800 pt-4 mb-5">
+                <div className="text-xs text-zinc-500 mb-2 flex items-center gap-1.5">
+                  <Terminal className="w-3 h-3" />
+                  Lifeform Kit 安装命令
+                </div>
+                <div className="bg-bg-deep rounded-md p-3 font-mono text-[11px] text-accent-emerald break-all">
+                  {LIFEFORM_INSTALL_CMD}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleGenerateKit(selectedSkill)}
+                  className="btn-primary text-xs flex-1 inline-flex items-center justify-center gap-1.5"
+                >
+                  <Wand2 className="w-3 h-3" />
+                  生成包含此技能的 Kit
+                </button>
+                <button
+                  onClick={handleCopyInstall}
+                  className="btn-secondary text-xs inline-flex items-center justify-center gap-1.5 min-w-[120px]"
+                  title="复制 Lifeform Kit 安装命令"
+                >
+                  {copyState === 'copied' ? (
+                    <>
+                      <Check className="w-3 h-3 text-accent-emerald" />
+                      已复制
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3 h-3" />
+                      复制安装命令
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   )
 }

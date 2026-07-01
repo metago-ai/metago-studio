@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Mail, Phone, Code2, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
@@ -7,7 +7,7 @@ type Mode = 'signin' | 'signup'
 type Tab = 'email' | 'phone' | 'github'
 
 export function AuthPage() {
-  const { signInWithEmail, signUpWithEmail, signInWithGitHub, signInWithPhone, verifyPhone, isCloudMode } = useAuth()
+  const { signInWithEmail, signUpWithEmail, signInWithGitHub, signInWithPhone, isCloudMode } = useAuth()
   const navigate = useNavigate()
 
   const [mode, setMode] = useState<Mode>('signin')
@@ -20,6 +20,7 @@ export function AuthPage() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [codeSent, setCodeSent] = useState(false)
+  const verifyFnRef = useRef<((token: string) => Promise<{ error: string | null }>) | null>(null)
 
   if (!isCloudMode) {
     return (
@@ -28,7 +29,7 @@ export function AuthPage() {
           <AlertCircle className="w-12 h-12 text-accent-amber mx-auto mb-4" />
           <h2 className="text-xl font-bold text-center text-zinc-100 mb-2">云服务未配置</h2>
           <p className="text-sm text-zinc-400 text-center mb-6">
-            当前为本地演示模式，数据存储在浏览器中。配置 Supabase 后可启用账号系统与云端同步。
+            当前为本地演示模式，数据存储在浏览器中。配置腾讯云 CloudBase 后可启用账号系统与云端同步。
           </p>
           <button
             onClick={() => navigate('/')}
@@ -51,9 +52,10 @@ export function AuthPage() {
     if (error) {
       setError(error)
     } else if (mode === 'signup') {
-      setInfo('注册成功！请检查邮箱完成验证。')
+      setInfo('注册成功！已自动登录。')
+      setTimeout(() => navigate('/profile'), 1500)
     } else {
-      navigate('/')
+      navigate('/profile')
     }
   }
 
@@ -68,25 +70,32 @@ export function AuthPage() {
   const handleSendCode = async () => {
     setLoading(true)
     setError(null)
-    const { error } = await signInWithPhone(phone)
+    const { error, verifyFn } = await signInWithPhone(phone)
     setLoading(false)
     if (error) {
       setError(error)
-    } else {
+    } else if (verifyFn) {
+      verifyFnRef.current = verifyFn
       setCodeSent(true)
       setInfo('验证码已发送，请查收短信')
+    } else {
+      setError('验证码发送异常')
     }
   }
 
   const handleVerifyCode = async () => {
+    if (!verifyFnRef.current) {
+      setError('请先发送验证码')
+      return
+    }
     setLoading(true)
     setError(null)
-    const { error } = await verifyPhone(phone, code)
+    const { error } = await verifyFnRef.current(code)
     setLoading(false)
     if (error) {
       setError(error)
     } else {
-      navigate('/')
+      navigate('/profile')
     }
   }
 

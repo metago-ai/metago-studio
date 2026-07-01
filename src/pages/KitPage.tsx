@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import { SkillLibrary } from '../components/SkillLibrary'
 import { Workspace } from '../components/Workspace'
 import { KitConfig } from '../components/KitConfig'
 import { PreviewModal } from '../components/PreviewModal'
 import { SKILLS } from '../data/skills'
+import { useStore } from '../store/useStore'
 import {
   generatePackageJson,
   generateReadme,
@@ -22,8 +23,30 @@ const DEFAULT_KIT_CONFIG: KitConfigState = {
 }
 
 export function KitPage() {
-  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([])
+  const pendingKitSkillIds = useStore(s => s.pendingKitSkillIds)
+  const setPendingKitSkillIds = useStore(s => s.setPendingKitSkillIds)
+  const consumedRef = useRef(false)
+
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>(() => {
+    if (pendingKitSkillIds.length > 0 && !consumedRef.current) {
+      consumedRef.current = true
+      const ids = [...pendingKitSkillIds]
+      setPendingKitSkillIds([])
+      return ids
+    }
+    return []
+  })
   const [kitConfig, setKitConfig] = useState<KitConfigState>(DEFAULT_KIT_CONFIG)
+
+  useEffect(() => {
+    if (pendingKitSkillIds.length > 0) {
+      setSelectedSkillIds((prev) => {
+        const merged = [...new Set([...prev, ...pendingKitSkillIds])]
+        return merged
+      })
+      setPendingKitSkillIds([])
+    }
+  }, [pendingKitSkillIds, setPendingKitSkillIds])
   const [preview, setPreview] = useState<PreviewState>({
     open: false,
     type: null,

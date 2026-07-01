@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LogOut, Settings as SettingsIcon, ChevronDown } from 'lucide-react'
+import { LogOut, Settings as SettingsIcon, ChevronDown, User as UserIcon } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 export function UserMenu() {
@@ -39,8 +39,8 @@ export function UserMenu() {
     )
   }
 
-  const email = user.email ?? user.phone ?? '用户'
-  const initial = email.charAt(0).toUpperCase()
+  const displayName = user.displayName ?? user.email ?? user.phone ?? '用户'
+  const initial = displayName.charAt(0).toUpperCase()
 
   return (
     <div ref={ref} className="relative">
@@ -57,9 +57,18 @@ export function UserMenu() {
       {open && (
         <div className="absolute right-0 top-full mt-1 w-56 rounded-xl border border-border-subtle bg-bg-card shadow-xl py-2 z-50">
           <div className="px-3 py-2 border-b border-border-subtle">
-            <p className="text-xs text-zinc-500">已登录</p>
-            <p className="text-sm text-zinc-200 truncate">{email}</p>
+            <p className="text-xs text-zinc-500">
+              {user.isAnonymous ? '游客模式' : '已登录'}
+            </p>
+            <p className="text-sm text-zinc-200 truncate">{displayName}</p>
           </div>
+          <NavLink
+            to="/profile"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:bg-bg-hover hover:text-zinc-200 transition-colors"
+          >
+            <UserIcon className="w-3.5 h-3.5" /> 我的
+          </NavLink>
           <NavLink
             to="/settings"
             onClick={() => setOpen(false)}
@@ -71,7 +80,7 @@ export function UserMenu() {
             onClick={async () => { await signOut(); setOpen(false); navigate('/') }}
             className="w-full flex items-center gap-2 px-3 py-2 text-xs text-accent-rose hover:bg-bg-hover transition-colors"
           >
-            <LogOut className="w-3.5 h-3.5" /> 登出
+            <LogOut className="w-3.5 h-3.5" /> {user.isAnonymous ? '退出游客' : '登出'}
           </button>
         </div>
       )}

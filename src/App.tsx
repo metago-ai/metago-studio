@@ -1,8 +1,27 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { HashRouter, Routes, Route } from 'react-router-dom'
 import { Header } from './components/Header'
 import { Dashboard } from './pages/Dashboard'
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { useStore } from './store/useStore'
+import { Onboarding } from './components/Onboarding'
+import { FeedbackButton } from './components/FeedbackButton'
+
+function CloudSyncBridge() {
+  const { user } = useAuth()
+  const setCloudUser = useStore(s => s.setCloudUser)
+  const refreshFromCloud = useStore(s => s.refreshFromCloud)
+
+  useEffect(() => {
+    const uid = user?.uid ?? null
+    setCloudUser(uid).catch(() => {})
+    if (uid) {
+      refreshFromCloud().catch(() => {})
+    }
+  }, [user?.uid, setCloudUser, refreshFromCloud])
+
+  return null
+}
 
 const SkillsPage = lazy(() => import('./pages/SkillsPage').then(m => ({ default: m.SkillsPage })))
 const DecisionLockPage = lazy(() => import('./pages/DecisionLockPage').then(m => ({ default: m.DecisionLockPage })))
@@ -13,6 +32,11 @@ const ProUpgradePage = lazy(() => import('./pages/ProUpgradePage').then(m => ({ 
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })))
 const PrivateSkillsPage = lazy(() => import('./pages/PrivateSkillsPage').then(m => ({ default: m.PrivateSkillsPage })))
 const AuthPage = lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })))
+const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })))
+const LegalPage = lazy(() => import('./pages/LegalPage').then(m => ({ default: m.LegalPage })))
+const HelpPage = lazy(() => import('./pages/HelpPage').then(m => ({ default: m.HelpPage })))
+const SharedPage = lazy(() => import('./pages/SharedPage').then(m => ({ default: m.SharedPage })))
+const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })))
 
 function PageLoading() {
   return (
@@ -25,6 +49,7 @@ function PageLoading() {
 export default function App() {
   return (
     <AuthProvider>
+      <CloudSyncBridge />
       <HashRouter>
         <div className="h-screen flex flex-col bg-atmosphere overflow-hidden">
           <Header />
@@ -41,9 +66,18 @@ export default function App() {
                 <Route path="/pro" element={<ProUpgradePage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/private-skills" element={<PrivateSkillsPage />} />
+                <Route path="/admin" element={<AdminPage />} />
+                <Route path="/terms" element={<LegalPage type="terms" />} />
+                <Route path="/privacy" element={<LegalPage type="privacy" />} />
+                <Route path="/refund" element={<LegalPage type="refund" />} />
+                <Route path="/help" element={<HelpPage />} />
+                <Route path="/shared/:encoded" element={<SharedPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
               </Routes>
             </Suspense>
           </main>
+          <Onboarding />
+          <FeedbackButton />
         </div>
       </HashRouter>
     </AuthProvider>

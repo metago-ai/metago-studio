@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Sparkles, Shield, Dna, Play, Package,
   Crown, Lock, Settings as SettingsIcon, ExternalLink,
+  HelpCircle, User as UserIcon,
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { UserMenu } from './UserMenu'
@@ -15,7 +16,7 @@ const NAV_ITEMS = [
   { to: '/kit', label: 'Kit', icon: Package, end: false },
 ]
 
-const OFFICIAL_WEBSITE_URL = 'https://metago-ai.github.io/metago-website/'
+const OFFICIAL_WEBSITE_URL = '../'
 
 export function Header() {
   const { tier, trialDaysRemaining } = useStore()
@@ -109,6 +110,21 @@ export function Header() {
         </NavLink>
 
         <NavLink
+          to="/profile"
+          className={({ isActive }) =>
+            `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+              isActive
+                ? 'bg-accent-emerald/15 text-accent-emerald border border-accent-emerald/30'
+                : 'text-zinc-500 hover:text-zinc-200 hover:bg-bg-hover border border-transparent'
+            }`
+          }
+          title="我的"
+        >
+          <UserIcon className="w-3.5 h-3.5" />
+          <span className="hidden md:inline">我的</span>
+        </NavLink>
+
+        <NavLink
           to="/settings"
           className={({ isActive }) =>
             `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
@@ -120,6 +136,20 @@ export function Header() {
           title="设置"
         >
           <SettingsIcon className="w-3.5 h-3.5" />
+        </NavLink>
+
+        <NavLink
+          to="/help"
+          className={({ isActive }) =>
+            `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+              isActive
+                ? 'bg-zinc-700 text-zinc-100 border border-border-default'
+                : 'text-zinc-500 hover:text-zinc-200 hover:bg-bg-hover border border-transparent'
+            }`
+          }
+          title="帮助"
+        >
+          <HelpCircle className="w-3.5 h-3.5" />
         </NavLink>
 
         {/* 返回官网 */}

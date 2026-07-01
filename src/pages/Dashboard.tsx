@@ -7,6 +7,7 @@ import {
 import { StatCard } from '../components/StatCard'
 import { ActivityList } from '../components/ActivityList'
 import { useStore } from '../store/useStore'
+import { useAuth } from '../contexts/AuthContext'
 import { TIER_INFO } from '../lib/proGate'
 
 const QUICK_ENTRIES = [
@@ -44,8 +45,11 @@ const ACCENT_MAP = {
 
 export function Dashboard() {
   const { skills, evolutionStats, activities, decisionLockHistory, tier, trialDaysRemaining, lockStats } = useStore()
+  const { user } = useAuth()
 
   const passRate = lockStats.passRate.toFixed(1)
+  const displayName = user?.displayName || user?.email || user?.phone || (user?.isAnonymous ? '探索者' : '开发者')
+  const maxDailyCount = Math.max(...evolutionStats.dailyCounts.map(d => d.count), 1)
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -57,7 +61,7 @@ export function Dashboard() {
       >
         <div>
           <h1 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
-            欢迎回来，易霄
+            欢迎回来，{displayName}
             <span className="text-2xl">👋</span>
           </h1>
           <p className="text-sm text-zinc-500 mt-1">
@@ -99,30 +103,28 @@ export function Dashboard() {
           value={skills.length}
           hint="10 大能力族"
           accent="emerald"
-          trend={{ value: '2 新增', positive: true }}
         />
         <StatCard
           icon={Dna}
           label="进化次数"
           value={evolutionStats.totalEvolutions}
-          hint={`成功率 ${evolutionStats.successRate.toFixed(1)}%`}
+          hint={evolutionStats.totalEvolutions > 0 ? `成功率 ${evolutionStats.successRate.toFixed(1)}%` : '尚未开始'}
           accent="teal"
-          trend={{ value: `+${evolutionStats.last7Days}`, positive: true }}
+          trend={evolutionStats.last7Days > 0 ? { value: `+${evolutionStats.last7Days}`, positive: true } : undefined}
         />
         <StatCard
           icon={Shield}
           label="校验通过率"
-          value={`${passRate}%`}
-          hint={`${decisionLockHistory.length} 次校验`}
+          value={decisionLockHistory.length > 0 ? `${passRate}%` : '—'}
+          hint={decisionLockHistory.length > 0 ? `${decisionLockHistory.length} 次校验` : '尚未校验'}
           accent="blue"
         />
         <StatCard
           icon={ActivityIcon}
           label="平均进化耗时"
-          value={`${evolutionStats.averageDurationMs}ms`}
+          value={evolutionStats.averageDurationMs > 0 ? `${evolutionStats.averageDurationMs}ms` : '—'}
           hint="P50 延迟"
           accent="amber"
-          trend={{ value: '-12%', positive: true }}
         />
       </motion.div>
 
@@ -182,32 +184,61 @@ export function Dashboard() {
             <TrendingUp className="w-4 h-4 text-accent-teal" />
             进化趋势（7 天）
           </h3>
-          <div className="space-y-2">
-            {evolutionStats.dailyCounts.map((day, i) => (
-              <div key={day.date} className="flex items-center gap-3">
-                <span className="text-xs text-zinc-500 w-12">{day.date.slice(5)}</span>
-                <div className="flex-1 h-6 bg-bg-elevated/50 rounded overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${(day.count / 2) * 100}%` }}
-                    transition={{ duration: 0.5, delay: 0.2 + i * 0.05 }}
-                    className="h-full bg-gradient-to-r from-accent-emerald/60 to-accent-teal/60 rounded"
-                  />
-                </div>
-                <span className="text-xs text-zinc-400 w-6 text-right">{day.count}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 pt-4 border-t border-border-subtle">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-zinc-500">本周合计</span>
-              <span className="text-accent-emerald font-semibold">
-                {evolutionStats.last7Days} 次进化
-              </span>
+          {evolutionStats.dailyCounts.length === 0 ? (
+            <div className="text-center py-8">
+              <Dna className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+              <p className="text-xs text-zinc-500">暂无进化记录</p>
+              <p className="text-[10px] text-zinc-600 mt-1">添加进化档案后将显示趋势</p>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {evolutionStats.dailyCounts.map((day, i) => (
+                  <div key={day.date} className="flex items-center gap-3">
+                    <span className="text-xs text-zinc-500 w-12">{day.date.slice(5)}</span>
+                    <div className="flex-1 h-6 bg-bg-elevated/50 rounded overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(day.count / maxDailyCount) * 100}%` }}
+                        transition={{ duration: 0.5, delay: 0.2 + i * 0.05 }}
+                        className="h-full bg-gradient-to-r from-accent-emerald/60 to-accent-teal/60 rounded"
+                      />
+                    </div>
+                    <span className="text-xs text-zinc-400 w-6 text-right">{day.count}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 pt-4 border-t border-border-subtle">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-500">本周合计</span>
+                  <span className="text-accent-emerald font-semibold">
+                    {evolutionStats.last7Days} 次进化
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </motion.div>
+
+      {/* Footer */}
+      <footer className="card-base p-4 mt-4">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-zinc-600">
+          <div className="flex items-center gap-3">
+            <span>© 2026 MetaGO</span>
+            <span className="text-zinc-700">·</span>
+            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">
+              浙ICP备2026062766号
+            </a>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link to="/terms" className="hover:text-zinc-400 transition-colors">用户协议</Link>
+            <Link to="/privacy" className="hover:text-zinc-400 transition-colors">隐私政策</Link>
+            <Link to="/refund" className="hover:text-zinc-400 transition-colors">退款政策</Link>
+            <Link to="/help" className="hover:text-zinc-400 transition-colors">帮助中心</Link>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

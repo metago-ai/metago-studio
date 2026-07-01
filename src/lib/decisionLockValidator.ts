@@ -445,3 +445,24 @@ export function calculateLockStats(records: DecisionLockRecord[]) {
     stageBlocks,
   }
 }
+
+const LOCK_HISTORY_KEY = 'metago_decision_lock_history_v1'
+
+export function loadDecisionLockHistory(): DecisionLockRecord[] {
+  try {
+    const raw = localStorage.getItem(LOCK_HISTORY_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export function saveDecisionLockHistory(records: DecisionLockRecord[]): void {
+  try {
+    localStorage.setItem(LOCK_HISTORY_KEY, JSON.stringify(records.slice(0, 500)))
+  } catch {
+    // localStorage 满了或不可用，忽略
+  }
+}

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { exportAndDownloadLockJSONL, exportAndDownloadLockMarkdown } from '../lib/exporters'
+import { ShareButton } from '../components/ShareButton'
 import type { DecisionLockRecord } from '../types'
 
 const SAMPLE_INPUTS = [
@@ -248,6 +249,15 @@ export function DecisionLockPage() {
                   <Download className="w-3 h-3" />
                   Markdown
                 </button>
+                {currentRecord && (
+                  <ShareButton
+                    data={{
+                      title: `决策锁校验结果 · ${currentRecord.passed ? '通过' : '阻断'} · ${new Date(currentRecord.timestamp).toLocaleString('zh-CN')}`,
+                      content: `用户意图：${userInput.slice(0, 200)}\n\nAI输出：${aiOutput.slice(0, 500)}\n\n校验结果：${currentRecord.passed ? '✅ 通过' : '❌ 阻断'}\n总耗时：${currentRecord.totalDurationMs}ms\n${currentRecord.blockedReason ? `阻断原因：${currentRecord.blockedReason}` : ''}`,
+                      type: 'decision_lock',
+                    }}
+                  />
+                )}
               </div>
             </div>
 
