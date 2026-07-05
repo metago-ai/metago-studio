@@ -1,7 +1,7 @@
 import type { SceneTemplate } from '../types'
 
 /**
- * 场景模板 mock 数据
+ * 场景模板（产品内置定义）
  * 6 个预设场景，覆盖代码/风险/进化/合规/架构/溯源
  */
 

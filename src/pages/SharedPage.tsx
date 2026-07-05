@@ -27,7 +27,9 @@ export function SharedPage() {
       return
     }
     try {
-      const json = decodeURIComponent(escape(atob(encoded)))
+      // 标准 Base64 → UTF-8（替代已废弃的 escape/unescape）
+      const bytes = Uint8Array.from(atob(encoded), c => c.charCodeAt(0))
+      const json = new TextDecoder().decode(bytes)
       const data = JSON.parse(json) as SharedPayload
       if (!data.t || !data.s || !data.c) {
         setError('分享内容格式错误')

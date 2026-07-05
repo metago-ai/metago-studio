@@ -1,16 +1,57 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, Send, X, CheckCircle2, Loader2 } from 'lucide-react'
+import { MessageSquare, Send, X, CheckCircle2, Loader2, CloudOff } from 'lucide-react'
 import { callFunction } from '../lib/cloudFunctions'
 import { useAuth } from '../contexts/AuthContext'
+
+const PENDING_KEY = 'metago_feedback_pending'
 
 export function FeedbackButton() {
   const [open, setOpen] = useState(false)
   const [type, setType] = useState<'bug' | 'feature' | 'other'>('bug')
   const [content, setContent] = useState('')
   const [contact, setContact] = useState('')
-  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'queued' | 'error'>('idle')
   const { user } = useAuth()
+
+  /** 重试上传 localStorage 中的 pending 反馈队列 */
+  const retryPendingFeedback = async () => {
+    try {
+      const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]')
+      if (pending.length === 0) return
+      const remaining: typeof pending = []
+      for (const item of pending) {
+        try {
+          const res = await callFunction('sync', {
+            action: 'submitFeedback',
+            feedback: {
+              type: item.type,
+              content: item.content,
+              contact: item.contact,
+              userId: user?.uid || 'anonymous',
+              createdAt: new Date(item.ts).toISOString(),
+            },
+          })
+          if (res.code !== 0 && res.code !== 200) remaining.push(item)
+        } catch {
+          remaining.push(item)
+        }
+      }
+      if (remaining.length === 0) localStorage.removeItem(PENDING_KEY)
+      else localStorage.setItem(PENDING_KEY, JSON.stringify(remaining))
+    } catch {
+      // ignore
+    }
+  }
+
+  // 挂载时 + 网络恢复时自动重试 pending 队列
+  useEffect(() => {
+    retryPendingFeedback()
+    const handleOnline = () => retryPendingFeedback()
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid])
 
   const handleSubmit = async () => {
     if (!content.trim()) return
@@ -28,6 +69,8 @@ export function FeedbackButton() {
       })
       if (res.code === 0 || res.code === 200) {
         setStatus('sent')
+        // 顺便重试 pending 队列
+        retryPendingFeedback()
         setTimeout(() => {
           setOpen(false)
           setStatus('idle')
@@ -39,19 +82,18 @@ export function FeedbackButton() {
         setStatus('error')
       }
     } catch {
-      // 降级：保存到本地
+      // 降级：保存到本地 pending 队列，网络恢复后自动重试上传
       try {
-        const key = 'metago_feedback_pending'
-        const pending = JSON.parse(localStorage.getItem(key) || '[]')
-        pending.push({ type, content, contact, ts: Date.now() })
-        localStorage.setItem(key, JSON.stringify(pending))
-        setStatus('sent')
+        const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]')
+        pending.push({ type, content: content.trim(), contact: contact.trim(), ts: Date.now() })
+        localStorage.setItem(PENDING_KEY, JSON.stringify(pending))
+        setStatus('queued')
         setTimeout(() => {
           setOpen(false)
           setStatus('idle')
           setContent('')
           setContact('')
-        }, 2000)
+        }, 2500)
       } catch {
         setStatus('error')
       }
@@ -101,6 +143,12 @@ export function FeedbackButton() {
                   <CheckCircle2 className="w-12 h-12 text-accent-emerald mx-auto mb-3" />
                   <p className="text-sm text-zinc-300">反馈已提交，感谢您的支持！</p>
                   <p className="text-xs text-zinc-600 mt-1">我们会在1-3个工作日内处理</p>
+                </div>
+              ) : status === 'queued' ? (
+                <div className="py-8 text-center">
+                  <CloudOff className="w-12 h-12 text-accent-amber mx-auto mb-3" />
+                  <p className="text-sm text-zinc-300">网络异常，反馈已暂存本地</p>
+                  <p className="text-xs text-zinc-500 mt-1">网络恢复后将自动重新上传，无需重试</p>
                 </div>
               ) : (
                 <div className="space-y-4">

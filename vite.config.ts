@@ -2,9 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
-// base 设为 './' 以兼容 CloudBase 静态部署
+// base 设为 '/studio/' 以兼容 CloudBase 子目录部署
+// 绝对路径确保 /studio 和 /studio/ 都能正确加载资源
 export default defineConfig({
-  base: './',
+  base: '/studio/',
   build: {
     rollupOptions: {
       output: {

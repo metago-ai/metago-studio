@@ -1,0 +1,10 @@
+{
+  "name": "userManager",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.6.2",
+    "bcryptjs": "^2.4.3",
+    "tencentcloud-sdk-nodejs-sms": "^4.0.900"
+  }
+}

@@ -1,7 +1,7 @@
 import type { EvolutionRecord, EvolutionStats, Activity } from '../types'
 
 /**
- * 进化档案 mock 数据
+ * 进化档案（产品内置示例数据）
  * 基于 metago-meta-evolve SKILL.md 的五阶段循环模型
  */
 

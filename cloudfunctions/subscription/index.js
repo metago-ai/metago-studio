@@ -1,234 +1,437 @@
 /**
- * MetaGO Studio - Subscription Cloud Function
- * 订阅管理：试用激活、授权码验证、订阅状态查询
+ * MetaGO Studio - Subscription Cloud Function（V3 五档定价）
+ * 订阅管理：授权码云端验证激活、订阅状态查询、取消订阅、Token 用量查询
+ *
+ * Action 列表（与前端 cloudFunctions.ts 完全对齐）：
+ *   - getProfile          查询用户订阅状态（服务端权威）
+ *   - activatePro         授权码云端验证激活
+ *   - cancelSubscription  取消订阅（降级为 free）
+ *   - generateLicense     管理员生成授权码
+ *   - getTokenUsage       查询当月 Token 已用量
+ *
+ * V3 五档定价（2026-07-06 重构）：
+ *   - free        社区版：10万 tokens/天，无 BYOK
+ *   - pro         个人版 ¥39/月：500万 tokens/月，BYOK 可选
+ *   - pro_plus    专业版 ¥99/月：2000万 tokens/月 + 行为银行信用 + 优先支持
+ *   - team        团队版 ¥199/月起 + 500小时 + 超出 ¥0.5/小时
+ *   - enterprise  企业版 ¥3万/年起 + ¥6000/席位/年 + 强制 BYOK + 私有部署
+ *
+ * 授权码格式：
+ *   - METAGO-PRO-XXXX-XXXX-XXXX       → pro
+ *   - METAGO-PROPLUS-XXXX-XXXX-XXXX   → pro_plus
+ *   - METAGO-TEAM-XXXX-XXXX-XXXX      → team
+ *   - METAGO-ENT-XXXX-XXXX-XXXX       → enterprise
+ *
+ * V3 已下线 14 天免费试用（trial）。startTrial action 保留兼容但返回失败提示。
  */
 
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
-function generateLicenseKey() {
+/**
+ * 生成授权码（格式：METAGO-{TYPE}-XXXX-XXXX-XXXX）
+ * @param {'pro'|'pro_plus'|'team'|'enterprise'} type
+ */
+function generateLicenseKey(type = 'pro') {
   const crypto = require('crypto')
-  const raw = crypto.randomBytes(24).toString('hex').toUpperCase()
-  const parts = []
-  for (let i = 0; i < raw.length; i += 4) {
-    parts.push(raw.slice(i, i + 4))
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  const seg = () => {
+    const buf = crypto.randomBytes(4)
+    let s = ''
+    for (let i = 0; i < 4; i++) {
+      s += chars[buf[i] % chars.length]
+    }
+    return s
   }
-  return 'META-' + parts.slice(0, 5).join('-')
+  // 各 tier 的前缀映射
+  const prefixMap = {
+    pro: 'PRO',
+    pro_plus: 'PROPLUS',
+    team: 'TEAM',
+    enterprise: 'ENT',
+  }
+  const prefix = prefixMap[type] || 'PRO'
+  return `METAGO-${prefix}-${seg()}-${seg()}-${seg()}`
+}
+
+/**
+ * 从授权码解析档位类型（V3 支持 4 种前缀）
+ */
+function parseLicenseTier(licenseKey) {
+  if (/^METAGO-PRO-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})$/.test(licenseKey)) {
+    return 'pro'
+  }
+  if (/^METAGO-PROPLUS-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})$/.test(licenseKey)) {
+    return 'pro_plus'
+  }
+  if (/^METAGO-TEAM-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})$/.test(licenseKey)) {
+    return 'team'
+  }
+  if (/^METAGO-ENT-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})$/.test(licenseKey)) {
+    return 'enterprise'
+  }
+  return null
+}
+
+/**
+ * 各 tier 默认配置（V3）
+ */
+const TIER_DEFAULTS = {
+  free:       { seats: 1, teamHoursBalance: 0,   enterpriseSeats: 0  },
+  pro:        { seats: 1, teamHoursBalance: 0,   enterpriseSeats: 0  },
+  pro_plus:   { seats: 1, teamHoursBalance: 0,   enterpriseSeats: 0  },
+  team:       { seats: 5, teamHoursBalance: 500, enterpriseSeats: 0  },
+  enterprise: { seats: 5, teamHoursBalance: 0,   enterpriseSeats: 5  },
+}
+
+/**
+ * 构造标准 UserProfile 返回结构（V3，含 teamHoursBalance/enterpriseSeats）
+ */
+function buildProfile(profile) {
+  if (!profile) {
+    return {
+      tier: 'free',
+      email: '',
+      licenseKey: '',
+      activatedAt: null,
+      expiresAt: null,
+      seats: 1,
+      teamHoursBalance: 0,
+      enterpriseSeats: 0,
+    }
+  }
+  let tier = profile.tier || 'free'
+  // V3 数据迁移：旧 trial 数据降级为 free
+  if (tier === 'trial') tier = 'free'
+  // 服务端过期检查（V3 五档全包含）
+  if (tier !== 'free' && profile.expiresAt) {
+    if (new Date(profile.expiresAt) < new Date()) {
+      tier = 'free'
+    }
+  }
+  const defaults = TIER_DEFAULTS[tier] || TIER_DEFAULTS.free
+  return {
+    tier,
+    email: profile.email || '',
+    licenseKey: profile.licenseKey || '',
+    activatedAt: profile.activatedAt ? new Date(profile.activatedAt).toISOString() : null,
+    expiresAt: profile.expiresAt ? new Date(profile.expiresAt).toISOString() : null,
+    seats: profile.seats || defaults.seats,
+    teamHoursBalance: profile.teamHoursBalance ?? defaults.teamHoursBalance,
+    enterpriseSeats: profile.enterpriseSeats ?? defaults.enterpriseSeats,
+  }
 }
 
 exports.main = async (event) => {
-  const { action, userInfo } = event
-  const openid = userInfo?.openid || event.openid
+  // HTTP 触发兼容：解析 HTTP body
+  if (event.httpMethod && event.body) {
+    try {
+      const parsed = JSON.parse(event.body)
+      event = { ...event, ...parsed }
+    } catch { /* body 不是 JSON */ }
+  }
 
-  if (!openid) return { code: 401, message: '未登录' }
+  const { action } = event
+
+  // 获取用户身份（兼容 Web SDK、小程序、HTTP 触发）
+  const wxContext = cloud.getWXContext()
+  const openid = wxContext.OPENID || wxContext.UID || wxContext.APPID
+    || event.userInfo?.openid || event.userInfo?.openId || event.userInfo?.uid
+    || event.openid || event.uid || event._clientUid
+
+  if (!openid) return { code: 401, message: '未登录，无法获取用户身份', debug: { wxContextKeys: Object.keys(wxContext || {}) } }
 
   const db = cloud.database()
   const _ = db.command
+  const now = new Date()
+
+  // 确保必要集合存在
+  for (const col of ['user_profiles', 'orders', 'licenses']) {
+    try { await db.createCollection(col) } catch { /* 已存在 */ }
+  }
 
   switch (action) {
-    // ========== 激活试用 ==========
-    case 'activateTrial': {
-      const { email } = event
-      if (!email || !email.includes('@')) {
-        return { code: 400, message: '请输入有效邮箱' }
+    // ========== 查询用户订阅状态（服务端权威） ==========
+    case 'getProfile': {
+      const res = await db.collection('user_profiles').where({ openid }).get()
+      const profile = res.data?.[0]
+
+      if (!profile) {
+        return { code: 0, data: buildProfile(null) }
       }
 
-      // 检查是否已试用过
-      const existing = await db.collection('user_profiles').where({ openid }).get()
-      const profile = existing.data?.[0]
-
-      if (profile?.trialUsed) {
-        return { code: 409, message: '您已使用过免费试用' }
-      }
-
-      const licenseKey = generateLicenseKey()
-      const now = new Date()
-      const expiresAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
-
-      // 更新或创建用户档案
-      if (profile) {
+      // V3 数据迁移：旧 trial 数据降级为 free
+      let currentTier = profile.tier || 'free'
+      let needUpdate = false
+      if (currentTier === 'trial') {
+        currentTier = 'free'
         await db.collection('user_profiles').where({ openid }).update({
-          tier: 'pro',
-          email,
-          licenseKey,
-          licenseSource: 'trial',
-          expiresAt,
-          trialUsed: true,
-          updatedAt: now,
+          data: { tier: 'free', updatedAt: now }
         })
-      } else {
-        await db.collection('user_profiles').add({
-          openid,
-          email,
-          tier: 'pro',
-          licenseKey,
-          licenseSource: 'trial',
-          expiresAt,
-          trialUsed: true,
-          createdAt: now,
-          updatedAt: now,
-        })
+        profile.tier = 'free'
+        needUpdate = true
       }
 
-      // 记录订单
-      await db.collection('orders').add({
-        orderId: `trial_${Date.now()}`,
-        openid,
-        plan: 'trial',
-        amount: 0,
-        status: 'completed',
-        licenseKey,
-        createdAt: now,
-      })
+      // 过期自动降级（V3 五档全包含）
+      if (currentTier !== 'free' && profile.expiresAt) {
+        if (new Date(profile.expiresAt) < now) {
+          await db.collection('user_profiles').where({ openid }).update({
+            data: {
+              tier: 'free',
+              expiredAt: now,
+              updatedAt: now,
+            }
+          })
+          profile.tier = 'free'
+          needUpdate = true
+        }
+      }
 
+      return { code: 0, data: buildProfile(profile) }
+    }
+
+    // ========== 启动14天免费试用（V3 已下线，保留兼容返回失败）==========
+    case 'startTrial': {
+      // V3 已下线 14 天免费试用。新定价：直接订阅 Pro 或 Pro+
       return {
-        code: 0,
-        data: {
-          tier: 'pro',
-          licenseKey,
-          expiresAt: expiresAt.toISOString(),
-          source: 'trial',
-        },
+        code: 410,
+        message: '14 天免费试用已下线，请直接订阅 Pro（¥39/月）或 Pro+（¥99/月）',
       }
     }
 
-    // ========== 授权码激活 ==========
-    case 'activateLicense': {
-      const { licenseKey } = event
-      if (!licenseKey) return { code: 400, message: '请输入授权码' }
+    // ========== 授权码云端验证激活 ==========
+    case 'activatePro': {
+      const { licenseKey, email } = event
+      const contact = email || event.contact || ''
+      if (!licenseKey) {
+        return { code: 400, message: '请输入授权码' }
+      }
 
-      // 查询授权码
-      const licenseRes = await db.collection('licenses').where({
-        licenseKey,
-        status: 'unused',
-      }).get()
+      // 格式预检（V3 支持 4 种前缀）
+      const licenseTier = parseLicenseTier(licenseKey)
+      if (!licenseTier) {
+        return { code: 400, message: '授权码格式错误，应为 METAGO-PRO/PROPLUS/TEAM/ENT-XXXX-XXXX-XXXX' }
+      }
+
+      // 查询授权码（服务端权威验证）
+      const licenseRes = await db.collection('licenses').where({ licenseKey }).get()
 
       if (!licenseRes.data || licenseRes.data.length === 0) {
-        return { code: 404, message: '授权码无效或已被使用' }
+        return { code: 404, message: '授权码不存在，请检查后重试' }
       }
 
       const license = licenseRes.data[0]
 
-      // 检查是否过期
-      if (new Date(license.expiresAt) < new Date()) {
-        await db.collection('licenses').where({ licenseKey }).update({
-          status: 'expired',
-        })
+      // 检查状态
+      if (license.status === 'used') {
+        return { code: 410, message: '授权码已被使用' }
+      }
+      if (license.status === 'revoked') {
+        return { code: 403, message: '授权码已被吊销' }
+      }
+      if (license.status === 'expired' || (license.expiresAt && new Date(license.expiresAt) < now)) {
+        await db.collection('licenses').where({ licenseKey }).update({ data: { status: 'expired' } })
         return { code: 410, message: '授权码已过期' }
       }
+      if (license.status !== 'unused' && license.status !== 'active') {
+        return { code: 403, message: `授权码状态异常（${license.status}）` }
+      }
 
-      // 激活
-      const now = new Date()
-      const expiresAt = license.expiresAt
+      // 计算到期时间
+      const activatedAt = now
+      let expiresAt
+      if (license.expiresAt) {
+        expiresAt = new Date(license.expiresAt)
+      } else if (license.durationDays) {
+        expiresAt = new Date(now.getTime() + license.durationDays * 24 * 60 * 60 * 1000)
+      } else {
+        expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+      }
 
+      // V3 各 tier 的默认 seats/teamHoursBalance/enterpriseSeats
+      const defaults = TIER_DEFAULTS[licenseTier] || TIER_DEFAULTS.pro
+      const seats = license.seats || defaults.seats
+      const teamHoursBalance = defaults.teamHoursBalance
+      const enterpriseSeats = defaults.enterpriseSeats
+
+      // 查询现有档案
       const existing = await db.collection('user_profiles').where({ openid }).get()
-      if (existing.data?.[0]) {
-        await db.collection('user_profiles').where({ openid }).update({
-          tier: 'pro',
-          licenseKey,
-          licenseSource: 'license',
-          expiresAt,
-          updatedAt: now,
-        })
+      const profile = existing.data?.[0]
+
+      const profileData = {
+        tier: licenseTier,
+        email: email || profile?.email || '',
+        contact: contact || profile?.contact || email || '',
+        licenseKey,
+        licenseSource: 'license',
+        activatedAt,
+        expiresAt,
+        seats,
+        teamHoursBalance,
+        enterpriseSeats,
+        updatedAt: now,
+      }
+
+      if (profile) {
+        await db.collection('user_profiles').where({ openid }).update({ data: profileData })
       } else {
         await db.collection('user_profiles').add({
           openid,
-          tier: 'pro',
-          licenseKey,
-          licenseSource: 'license',
-          expiresAt,
+          ...profileData,
           createdAt: now,
-          updatedAt: now,
         })
       }
 
       // 标记授权码已使用
       await db.collection('licenses').where({ licenseKey }).update({
-        status: 'used',
-        usedBy: openid,
-        usedAt: now,
+        data: {
+          status: 'used',
+          usedBy: openid,
+          usedAt: now,
+          usedEmail: email || '',
+          usedContact: contact || '',
+        }
       })
 
+      // 记录订单
+      await db.collection('orders').add({
+        orderId: `license_${Date.now()}_${openid.slice(-8)}`,
+        openid,
+        plan: licenseTier,
+        orderType: 'subscription',
+        amount: license.amount || 0,
+        status: 'completed',
+        licenseKey,
+        email: email || '',
+        contact: contact || '',
+        createdAt: now,
+      })
+
+      const fullProfile = { ...profile, ...profileData }
+      const tierLabel = {
+        pro: 'Pro',
+        pro_plus: 'Pro+',
+        team: 'Team',
+        enterprise: 'Enterprise',
+      }[licenseTier] || 'Pro'
       return {
         code: 0,
-        data: {
-          tier: 'pro',
-          licenseKey,
-          expiresAt: expiresAt.toISOString(),
-          source: 'license',
-        },
+        data: buildProfile(fullProfile),
+        message: `${tierLabel} 授权激活成功`,
       }
     }
 
-    // ========== 查询订阅状态 ==========
-    case 'getStatus': {
-      const res = await db.collection('user_profiles').where({ openid }).get()
-      const profile = res.data?.[0]
+    // ========== 取消订阅（降级为 free） ==========
+    case 'cancelSubscription': {
+      const existing = await db.collection('user_profiles').where({ openid }).get()
+      const profile = existing.data?.[0]
 
       if (!profile) {
-        return {
-          code: 0,
-          data: {
-            tier: 'free',
-            trialUsed: false,
-          },
-        }
+        return { code: 0, data: buildProfile(null), message: '当前为免费版' }
       }
 
-      // 检查是否过期
-      let tier = profile.tier || 'free'
-      if (tier === 'pro' && profile.expiresAt) {
-        if (new Date(profile.expiresAt) < new Date()) {
-          tier = 'free'
-          await db.collection('user_profiles').where({ openid }).update({
-            tier: 'free',
-            expiredAt: new Date(),
-          })
+      await db.collection('user_profiles').where({ openid }).update({
+        data: {
+          tier: 'free',
+          expiresAt: now,
+          teamHoursBalance: 0,
+          enterpriseSeats: 0,
+          updatedAt: now,
         }
-      }
+      })
 
+      const updated = { ...profile, tier: 'free', expiresAt: now }
       return {
         code: 0,
-        data: {
-          tier,
-          licenseKey: profile.licenseKey,
-          licenseSource: profile.licenseSource,
-          expiresAt: profile.expiresAt,
-          trialUsed: profile.trialUsed || false,
-          email: profile.email,
-        },
+        data: buildProfile(updated),
+        message: '订阅已取消，已降级为社区版',
       }
     }
 
-    // ========== 生成授权码（管理员） ==========
+    // ========== 管理员生成授权码 ==========
     case 'generateLicense': {
       const ADMIN_OPENID = (process.env.ADMIN_OPENID || '').split(',').filter(Boolean)
       if (!ADMIN_OPENID.includes(openid)) {
         return { code: 403, message: '无权限' }
       }
-      const { plan = 'monthly', count = 1, note = '' } = event
-      const days = plan === 'yearly' ? 365 : plan === 'monthly' ? 30 : 14
+      const { plan = 'pro', count = 1, durationDays = 30, note = '' } = event
+      // V3 支持 4 种 tier
+      const validTiers = ['pro', 'pro_plus', 'team', 'enterprise']
+      const tier = validTiers.includes(plan) ? plan : 'pro'
       const licenses = []
 
       for (let i = 0; i < count; i++) {
-        const key = generateLicenseKey()
-        const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+        const key = generateLicenseKey(tier)
+        const expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000)
+        const defaults = TIER_DEFAULTS[tier]
         await db.collection('licenses').add({
           licenseKey: key,
-          plan,
+          plan: tier,
+          durationDays,
           expiresAt,
           status: 'unused',
           note,
+          seats: defaults.seats,
+          teamHoursBalance: defaults.teamHoursBalance,
+          enterpriseSeats: defaults.enterpriseSeats,
           createdBy: openid,
-          createdAt: new Date(),
+          createdAt: now,
         })
-        licenses.push({ key, expiresAt: expiresAt.toISOString() })
+        licenses.push({ key, expiresAt: expiresAt.toISOString(), plan: tier })
       }
 
-      return { code: 0, data: { licenses } }
+      return {
+        code: 0,
+        data: { licenses },
+      }
+    }
+
+    // ========== 查询当月 Token 用量（V3 按 tier 分档）==========
+    case 'getTokenUsage': {
+      const profileRes = await db.collection('user_profiles').where({ openid }).get()
+      const profile = profileRes.data?.[0]
+
+      if (!profile) {
+        return { code: 0, data: { used: 0, tier: 'free' } }
+      }
+
+      const tier = profile.tier === 'trial' ? 'free' : (profile.tier || 'free')
+
+      // Enterprise 强制 BYOK：不计量
+      if (tier === 'enterprise') {
+        return { code: 0, data: { used: 0, tier, byokRequired: true } }
+      }
+
+      const tokenUsage = profile.tokenUsage || { monthly: {}, daily: {} }
+      const monthStr = now.toISOString().slice(0, 7)
+      const todayStr = now.toISOString().slice(0, 10)
+
+      // 月配额（Pro/Pro+/Team）
+      const monthlyUsed = tokenUsage.monthly?.[monthStr] || 0
+      // 日配额（Free）
+      const dailyUsed = tokenUsage.daily?.[todayStr] || 0
+
+      // 按 tier 返回不同维度
+      // - free：返回当日用量（10万/天配额）
+      // - pro：500万/月
+      // - pro_plus：2000万/月
+      // - team：2000万/月共享池（已计入 teamHoursBalance 单独计量）
+      const used = (tier === 'free') ? dailyUsed : monthlyUsed
+
+      return {
+        code: 0,
+        data: {
+          used,
+          tier,
+          monthlyUsed,
+          dailyUsed,
+          month: monthStr,
+          date: todayStr,
+        },
+      }
     }
 
     default:
-      return { code: 400, message: '未知操作' }
+      return { code: 400, message: `未知操作: ${action}` }
   }
 }

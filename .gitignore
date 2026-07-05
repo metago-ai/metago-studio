@@ -36,3 +36,21 @@ node_modules/.tmp
 .env
 .env.local
 .env.*.local
+
+# E2E
+e2e-report/
+playwright-report/
+test-results/
+
+# Electron
+release/
+release_*/
+release-v*/
+dist-electron/
+
+# Build & test artifacts
+build/
+asar-extract-test/
+asar-verify/
+verify-report.json
+--output

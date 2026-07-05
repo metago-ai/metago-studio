@@ -58,8 +58,17 @@ export function SkillsPage() {
   }, [navigate, setPendingKitSkillIds])
 
   const handleCopyInstall = useCallback(async () => {
+    const allCmds = [
+      '# MetaGO Lifeform Kit 安装方式',
+      '# Gitee（一键引导安装-推荐）:',
+      LIFEFORM_INSTALL_CMD,
+      '# npm:',
+      'npm install metago-lifeform',
+      '# GitHub:',
+      'git clone https://github.com/MetaGO-Labs/MetaGO-Lifeform.git',
+    ].join('\n')
     try {
-      await navigator.clipboard?.writeText(LIFEFORM_INSTALL_CMD)
+      await navigator.clipboard?.writeText(allCmds)
       setCopyState('copied')
       setTimeout(() => setCopyState('idle'), 2000)
     } catch {
@@ -233,12 +242,30 @@ export function SkillsPage() {
               </div>
 
               <div className="border-t border-zinc-800 pt-4 mb-5">
-                <div className="text-xs text-zinc-500 mb-2 flex items-center gap-1.5">
+                <div className="text-xs text-zinc-500 mb-3 flex items-center gap-1.5">
                   <Terminal className="w-3 h-3" />
-                  Lifeform Kit 安装命令
+                  安装命令（三大平台）
                 </div>
-                <div className="bg-bg-deep rounded-md p-3 font-mono text-[11px] text-accent-emerald break-all">
-                  {LIFEFORM_INSTALL_CMD}
+                {/* Gitee / 引导安装 */}
+                <div className="bg-bg-deep rounded-md p-2.5 mb-2">
+                  <div className="text-[10px] text-zinc-600 mb-1">Gitee · 一键引导安装（Windows）</div>
+                  <div className="font-mono text-[11px] text-accent-emerald break-all">
+                    {LIFEFORM_INSTALL_CMD}
+                  </div>
+                </div>
+                {/* npm */}
+                <div className="bg-bg-deep rounded-md p-2.5 mb-2">
+                  <div className="text-[10px] text-zinc-600 mb-1">npm · Node.js 包</div>
+                  <div className="font-mono text-[11px] text-blue-400 break-all">
+                    npm install metago-lifeform
+                  </div>
+                </div>
+                {/* GitHub */}
+                <div className="bg-bg-deep rounded-md p-2.5">
+                  <div className="text-[10px] text-zinc-600 mb-1">GitHub · 开源仓库</div>
+                  <div className="font-mono text-[11px] text-zinc-400 break-all">
+                    github.com/MetaGO-Labs/MetaGO-Lifeform
+                  </div>
                 </div>
               </div>
 
@@ -252,8 +279,8 @@ export function SkillsPage() {
                 </button>
                 <button
                   onClick={handleCopyInstall}
-                  className="btn-secondary text-xs inline-flex items-center justify-center gap-1.5 min-w-[120px]"
-                  title="复制 Lifeform Kit 安装命令"
+                  className="btn-secondary text-xs inline-flex items-center justify-center gap-1.5 min-w-[130px]"
+                  title="复制三大平台安装命令"
                 >
                   {copyState === 'copied' ? (
                     <>

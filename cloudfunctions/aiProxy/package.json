@@ -1,0 +1,10 @@
+{
+  "name": "aiProxy",
+  "version": "1.0.0",
+  "description": "MetaGO Studio - AI 代理云函数（DeepSeek/GLM/博查）",
+  "main": "index.js",
+  "dependencies": {
+    "metago-studio": "file:../..",
+    "wx-server-sdk": "~2.6.3"
+  }
+}

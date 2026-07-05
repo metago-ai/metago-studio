@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Shield, Dna, Crown, ArrowRight, X, Sparkles,
+  Shield, Dna, Crown, ArrowRight, X, Sparkles, Package, BarChart3,
 } from 'lucide-react'
 
 const ONBOARDING_KEY = 'metago_onboarding_completed_v1'
+
+/** 快速开始行动入口（解决"看完不知道做什么"问题） */
+const QUICK_ACTIONS = [
+  { icon: Shield, title: '体验决策锁', desc: '立即试用 4 道关卡校验', path: '/decision-lock', bg: 'bg-accent-emerald/15', text: 'text-accent-emerald' },
+  { icon: Package, title: '组装能力 Kit', desc: '选择技能生成定制包', path: '/kit', bg: 'bg-accent-teal/15', text: 'text-accent-teal' },
+  { icon: BarChart3, title: '查看能力度量', desc: '了解你的能力画像', path: '/metrics', bg: 'bg-accent-blue/15', text: 'text-accent-blue' },
+] as const
 
 const STEPS = [
   {
@@ -36,6 +44,7 @@ const STEPS = [
 export function Onboarding({ onComplete }: { onComplete?: () => void }) {
   const [show, setShow] = useState(false)
   const [step, setStep] = useState(0)
+  const navigate = useNavigate()
 
   useEffect(() => {
     try {
@@ -62,6 +71,11 @@ export function Onboarding({ onComplete }: { onComplete?: () => void }) {
     } else {
       handleClose()
     }
+  }
+
+  const handleQuickAction = (path: string) => {
+    handleClose()
+    navigate(path)
   }
 
   const currentStep = STEPS[step]
@@ -127,6 +141,35 @@ export function Onboarding({ onComplete }: { onComplete?: () => void }) {
                 <p className="text-sm text-zinc-400 leading-relaxed">{currentStep.desc}</p>
               </motion.div>
             </AnimatePresence>
+
+            {/* 最后一步：推荐第一步行动指引 */}
+            {step === STEPS.length - 1 && (
+              <div className="mt-5 space-y-2">
+                <p className="text-xs text-zinc-500 font-medium flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-accent-amber" />
+                  推荐第一步：
+                </p>
+                {QUICK_ACTIONS.map((action) => {
+                  const ActionIcon = action.icon
+                  return (
+                    <button
+                      key={action.path}
+                      onClick={() => handleQuickAction(action.path)}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg border border-border-subtle hover:border-accent-emerald/40 hover:bg-bg-hover transition-all text-left group"
+                    >
+                      <div className={`w-8 h-8 rounded-lg ${action.bg} flex items-center justify-center flex-shrink-0`}>
+                        <ActionIcon className={`w-4 h-4 ${action.text}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-zinc-200">{action.title}</div>
+                        <div className="text-xs text-zinc-500">{action.desc}</div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-accent-emerald group-hover:translate-x-0.5 transition-all" />
+                    </button>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex items-center justify-between mt-8">

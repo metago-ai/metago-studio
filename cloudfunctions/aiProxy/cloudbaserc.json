@@ -1,0 +1,19 @@
+{
+  "envId": "metago-d6gfw1e4rf2a5bcad",
+  "version": "2.0",
+  "functions": [
+    {
+      "name": "aiProxy",
+      "config": {
+        "functionName": "aiProxy",
+        "timeout": 60,
+        "env": {
+          "DEEPSEEK_API_KEY": "",
+          "GLM_API_KEY": "",
+          "BOCHA_API_KEY": ""
+        },
+        "runtime": "Nodejs16.13"
+      }
+    }
+  ]
+}

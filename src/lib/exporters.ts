@@ -175,3 +175,198 @@ export function exportDashboardReport(data: DashboardReportData): void {
 export function exportDashboardToPDF(): void {
   window.print()
 }
+
+// ============ 通用 PDF 导出（iframe + print） ============
+
+/** 转义 HTML 特殊字符 */
+function escapeHTML(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/** 将类 Markdown 文本转为基础 HTML（支持表格、段落、换行） */
+function markdownToBasicHTML(content: string): string {
+  const escaped = escapeHTML(content)
+  const lines = escaped.split('\n')
+  const html: string[] = []
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    const trimmed = line.trim()
+    // 检测 Markdown 表格行：以 | 开头并以 | 结尾
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      const rows: string[][] = []
+      while (
+        i < lines.length &&
+        lines[i].trim().startsWith('|') &&
+        lines[i].trim().endsWith('|')
+      ) {
+        const cells = lines[i].split('|').slice(1, -1).map(c => c.trim())
+        // 跳过分隔行 |---|---|
+        if (!cells.every(c => /^[-:]+$/.test(c))) {
+          rows.push(cells)
+        }
+        i++
+      }
+      const [header, ...body] = rows
+      html.push('<table>')
+      if (header) {
+        html.push(
+          '<thead><tr>' +
+            header.map(c => `<th>${c}</th>`).join('') +
+            '</tr></thead>',
+        )
+      }
+      if (body.length) {
+        html.push('<tbody>')
+        for (const r of body) {
+          html.push('<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>')
+        }
+        html.push('</tbody>')
+      }
+      html.push('</table>')
+    } else {
+      // 普通段落（空行渲染为占位）
+      html.push(`<p>${line || '&nbsp;'}</p>`)
+      i++
+    }
+  }
+  return html.join('\n')
+}
+
+/**
+ * 导出为 PDF（使用浏览器原生 print API，生成可打印的 PDF）
+ * 创建一个隐藏的 iframe，写入 HTML 内容，调用 print()
+ */
+export function exportToPDF(
+  title: string,
+  sections: { heading: string; content: string }[],
+): void {
+  // 创建隐藏 iframe
+  const iframe = document.createElement('iframe')
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  document.body.appendChild(iframe)
+
+  const doc = iframe.contentDocument
+  if (!doc) {
+    if (iframe.parentNode) document.body.removeChild(iframe)
+    return
+  }
+
+  // 构建各 section 的 HTML
+  const sectionsHTML = sections
+    .map(s => {
+      return `
+      <section>
+        <h2>${escapeHTML(s.heading)}</h2>
+        <div>${markdownToBasicHTML(s.content)}</div>
+      </section>`
+    })
+    .join('\n')
+
+  doc.open()
+  doc.write(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHTML(title)}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 2cm;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #1a1a1a;
+      line-height: 1.6;
+      font-size: 12pt;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    h1 {
+      font-size: 22pt;
+      color: #0f766e;
+      border-bottom: 2px solid #0f766e;
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+    }
+    h2 {
+      font-size: 15pt;
+      color: #134e4a;
+      margin-top: 24px;
+      margin-bottom: 8px;
+      border-left: 4px solid #14b8a6;
+      padding-left: 8px;
+    }
+    p {
+      margin: 4px 0;
+    }
+    section {
+      page-break-inside: avoid;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 11pt;
+    }
+    th, td {
+      border: 1px solid #d4d4d4;
+      padding: 6px 10px;
+      text-align: left;
+    }
+    th {
+      background: #f0fdfa;
+      font-weight: 600;
+    }
+    tr:nth-child(even) td {
+      background: #fafafa;
+    }
+    .footer {
+      margin-top: 32px;
+      padding-top: 12px;
+      border-top: 1px solid #d4d4d4;
+      font-size: 9pt;
+      color: #737373;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>${escapeHTML(title)}</h1>
+  ${sectionsHTML}
+  <div class="footer">
+    由 MetaGO Studio Pro 生成 · ${new Date().toLocaleString('zh-CN')}
+  </div>
+</body>
+</html>`)
+  doc.close()
+
+  // 等待内容渲染后调用打印（兜底：onload + setTimeout 双保险）
+  const triggerPrint = () => {
+    try {
+      iframe.contentWindow?.focus()
+      iframe.contentWindow?.print()
+    } catch (e) {
+      console.error('[exportToPDF] print failed:', e)
+    }
+    setTimeout(() => {
+      if (iframe.parentNode) document.body.removeChild(iframe)
+    }, 1000)
+  }
+
+  iframe.onload = triggerPrint
+  setTimeout(triggerPrint, 300)
+}

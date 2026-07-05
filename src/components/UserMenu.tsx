@@ -28,7 +28,7 @@ export function UserMenu() {
     )
   }
 
-  if (!user) {
+  if (!user || user.isAnonymous) {
     return (
       <button
         onClick={() => navigate('/auth')}

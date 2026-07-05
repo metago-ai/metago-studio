@@ -1,15 +1,17 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import type { Skill } from '../types'
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import type { Skill } from '../types'
 
 /**
- * MetaGO Lifeform Kit 全部 26 个技能元数据
+ * MetaGO Lifeform Kit 核心技能元数据（Studio 内置展示）
  *
- * - 22 个核心技能（category: 'core'）
+ * - 24 个核心技能（category: 'core'，含 22 原始 + 2 工程质量族）
  * - 4 个 Dev Kit 技能（category: 'dev'）
+ *
+ * 注：Lifeform Kit 完整基因库含 39 个 metago-* 技能，此处为 Studio 内置展示子集。
  *
  * 数据内置在客户端，无需读取文件。estimatedSize 为对 SKILL.md 的估算字节数。
  */
 export const SKILLS: Skill[] = [
-  // ============ 核心技能（22 个） ============
+  // ============ 核心技能（24 个，含工程质量族） ============
   {
     id: 'metago-critique',
     title: '批判性分析',
@@ -246,8 +248,28 @@ export const SKILLS: Skill[] = [
     tags: ['安全', '代码'],
     estimatedSize: 13600,
   },
+
+  // ============ 交付质量族（2 个，新增） ============
+  {
+    id: 'metago-delivery-gate',
+    title: '交付验证门控',
+    description: '交付前原子验证清单',
+    detail: '交付前强制执行原子验证清单：技术层（tsc/build/产物扫描）+ 业务层（Web 端可达/云函数可调/AI 对话端到端）+ 链路层（exe 可下载/latest.yml 可访问）+ 缺陷猎杀（10 维度）。任何一项 FAIL = 任务未完成。',
+    category: 'core',
+    tags: ['验证', '质量'],
+    estimatedSize: 5800,
+  },
+  {
+    id: 'metago-discipline',
+    title: '自律执行协议',
+    description: '5 问自检反绕过',
+    detail: '输出"任务完成"前的五问自检：①是否运行 npm run verify？②verify 是否有 FAIL？③报告是否含验证小节？④每项 ✅ 是否有证据？⑤是否做了业务层验证？任何一问答"否"禁止宣告完成。配套反绕过条款：禁止"应该没问题"、禁止"逻辑上正确"、禁止"之前验证过"。',
+    category: 'core',
+    tags: ['自律', '质量'],
+    estimatedSize: 6200,
+  },
 ]
 
 /** 父包版本约束 */
-export const PARENT_PACKAGE_VERSION = '>=36.4.14'
+export const PARENT_PACKAGE_VERSION = '>=36.7.0'
 export const PARENT_PACKAGE_NAME = 'metago-lifeform'

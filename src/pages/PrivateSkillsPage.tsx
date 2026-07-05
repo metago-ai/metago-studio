@@ -1,17 +1,25 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Lock, Plus, FileText, Trash2, Edit3, X, Save, Eye, EyeOff, ShieldCheck, AlertCircle } from 'lucide-react'
+import { Lock, Plus, FileText, Trash2, Edit3, X, Save, Eye, EyeOff, ShieldCheck, AlertCircle, Crown, Download } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useStore } from '../store/useStore'
+
+/** Free 用户免费配额（先试后买） */
+const FREE_SKILL_QUOTA = 3
 
 export function PrivateSkillsPage() {
   const {
     privateSkills,
-    features,
+    tier,
     addPrivateSkillAction,
     updatePrivateSkillAction,
     removePrivateSkillAction,
     decryptViewAction,
   } = useStore()
+
+  const isPro = tier === 'pro' || tier === 'pro_plus' || tier === 'team' || tier === 'enterprise'
+  const quota = isPro ? 100 : FREE_SKILL_QUOTA
+  const isQuotaFull = privateSkills.length >= quota
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
 
@@ -23,6 +31,9 @@ export function PrivateSkillsPage() {
   const [viewMessage, setViewMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [isDecrypting, setIsDecrypting] = useState(false)
 
+  // 已解密的技能内容缓存（会话级，供卡片"导出 SKILL.md"使用）
+  const [decryptedSkills, setDecryptedSkills] = useState<Record<string, string>>({})
+
   // 表单状态
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -31,8 +42,6 @@ export function PrivateSkillsPage() {
   const [tags, setTags] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-
-  const isLocked = !features.privateSkillLibrary
 
   const resetForm = () => {
     setName('')
@@ -55,6 +64,15 @@ export function PrivateSkillsPage() {
   const handleSave = () => {
     if (!name.trim() || !content.trim() || !password.trim()) {
       setMessage({ type: 'error', text: '请填写名称、内容和加密口令' })
+      return
+    }
+    if (!editingId && privateSkills.length >= quota) {
+      setMessage({
+        type: 'error',
+        text: !isPro
+          ? `已达免费配额上限（${quota} 个），升级 Pro 解锁 100 个配额`
+          : `已达配额上限（${quota} 个），请删除旧技能后再添加`,
+      })
       return
     }
     const tagList = tags.split(',').map(t => t.trim()).filter(Boolean)
@@ -111,6 +129,8 @@ export function PrivateSkillsPage() {
       const result = await decryptViewAction(viewingSkill.id, viewPassword)
       if (result.success && result.content) {
         setDecryptedContent(result.content)
+        // 缓存解密内容，供卡片导出使用（会话级）
+        setDecryptedSkills(prev => ({ ...prev, [viewingSkill.id]: result.content! }))
         setViewMessage({ type: 'success', text: '解密成功' })
       } else {
         setViewMessage({ type: 'error', text: result.message })
@@ -122,28 +142,27 @@ export function PrivateSkillsPage() {
     }
   }
 
-  // Pro 未激活时显示锁定状态
-  if (isLocked) {
-    return (
-      <div className="max-w-3xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="card-base p-12 text-center"
-        >
-          <Lock className="w-12 h-12 text-accent-amber mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-zinc-100 mb-2">Pro 功能</h2>
-          <p className="text-sm text-zinc-400 mb-6">
-            私有技能库需要 Pro 授权。
-            <br />
-            端到端加密（零知识架构），服务器无法解密您的私有技能。
-          </p>
-          <a href="#/pro" className="btn-primary inline-flex">
-            升级到 Pro
-          </a>
-        </motion.div>
-      </div>
-    )
+  // 导出 SKILL.md（需先解密）
+  const handleExportSKILLMD = (id: string) => {
+    const skill = privateSkills.find(s => s.id === id)
+    if (!skill) return
+    const content = decryptedSkills[id]
+    if (!content) {
+      alert('请先解密查看该技能后，再进行导出')
+      return
+    }
+    // 组装标准 SKILL.md（YAML frontmatter + 解密内容）
+    const tagsLine = skill.tags.length > 0 ? `[${skill.tags.join(', ')}]` : '[]'
+    const skillMD = `---\nname: ${skill.name}\ndescription: ${skill.description || ''}\ntags: ${tagsLine}\n---\n\n${content}`
+    const blob = new Blob([skillMD], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${skill.name || 'skill'}.md`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   return (
@@ -161,13 +180,24 @@ export function PrivateSkillsPage() {
             <p className="text-xs text-zinc-500">端到端加密 · 零知识架构 · 服务器无法解密</p>
           </div>
         </div>
-        <button
-          onClick={() => { resetForm(); setShowAddModal(true); setMessage(null) }}
-          className="btn-primary text-sm"
-        >
-          <Plus className="w-4 h-4" />
-          添加技能
-        </button>
+        {isQuotaFull && !isPro ? (
+          <Link
+            to="/pro"
+            className="btn-primary text-sm"
+          >
+            <Crown className="w-4 h-4" />
+            升级解锁更多配额
+          </Link>
+        ) : (
+          <button
+            onClick={() => { resetForm(); setShowAddModal(true); setMessage(null) }}
+            className="btn-primary text-sm"
+            disabled={isQuotaFull}
+          >
+            <Plus className="w-4 h-4" />
+            添加技能
+          </button>
+        )}
       </motion.div>
 
       {/* 说明条 — 解释加密机制（回应用户疑问）*/}
@@ -191,15 +221,45 @@ export function PrivateSkillsPage() {
           <div className="text-2xl font-bold text-accent-emerald">{privateSkills.length}</div>
           <div className="text-xs text-zinc-500">已存储</div>
         </div>
-        <div className="card-base p-3 text-center">
-          <div className="text-2xl font-bold text-accent-teal">{100 - privateSkills.length}</div>
-          <div className="text-xs text-zinc-500">剩余配额</div>
+        <div className={`card-base p-3 text-center ${!isPro && isQuotaFull ? 'border-accent-amber/40' : ''}`}>
+          <div className={`text-2xl font-bold ${!isPro && isQuotaFull ? 'text-accent-amber' : 'text-accent-teal'}`}>
+            {quota - privateSkills.length}
+          </div>
+          <div className="text-xs text-zinc-500">
+            剩余配额{!isPro && <span className="text-accent-amber">（免费 {FREE_SKILL_QUOTA}）</span>}
+          </div>
         </div>
         <div className="card-base p-3 text-center">
           <div className="text-2xl font-bold text-accent-amber">AES-GCM</div>
           <div className="text-xs text-zinc-500">加密算法</div>
         </div>
       </div>
+
+      {/* Free 用户配额提示 */}
+      {!isPro && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className={`card-base p-3 flex items-start gap-2 text-xs ${isQuotaFull ? 'border-accent-amber/40' : ''}`}
+        >
+          <Crown className={`w-4 h-4 flex-shrink-0 mt-0.5 ${isQuotaFull ? 'text-accent-amber' : 'text-zinc-500'}`} />
+          <div className="flex-1">
+            {isQuotaFull ? (
+              <span className="text-zinc-300">
+                已用完免费配额（{FREE_SKILL_QUOTA} 个）。
+                <Link to="/pro" className="text-accent-emerald hover:underline ml-1">升级 Pro</Link>
+                解锁 100 个加密配额。
+              </span>
+            ) : (
+              <span className="text-zinc-400">
+                免费版可存储 {FREE_SKILL_QUOTA} 个私有技能，已用 {privateSkills.length}/{FREE_SKILL_QUOTA}。
+                <Link to="/pro" className="text-accent-emerald hover:underline ml-1">升级 Pro</Link>
+                解锁 100 个配额。
+              </span>
+            )}
+          </div>
+        </motion.div>
+      )}
 
       {/* 技能列表 */}
       {privateSkills.length === 0 ? (
@@ -255,6 +315,13 @@ export function PrivateSkillsPage() {
                       title="解密查看"
                     >
                       <Eye className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleExportSKILLMD(skill.id)}
+                      className="p-1.5 rounded hover:bg-bg-hover text-zinc-400 hover:text-accent-emerald"
+                      title="导出 SKILL.md（需先解密）"
+                    >
+                      <Download className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleDelete(skill.id)}

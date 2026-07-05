@@ -1,7 +1,7 @@
 import type { DecisionLockRecord } from '../types'
 
 /**
- * 决策锁校验记录 mock 数据
+ * 决策锁校验记录（产品内置示例数据）
  * 基于决策锁四道关卡：IVL → ILT → OSG → 完整性
  */
 
@@ -69,6 +69,7 @@ export const SUCCESS_RECORD: DecisionLockRecord = {
   ],
   totalDurationMs: 445,
   passed: true,
+  hardMode: true,
 }
 
 export const BLOCKED_RECORD: DecisionLockRecord = {
@@ -121,6 +122,7 @@ export const BLOCKED_RECORD: DecisionLockRecord = {
   totalDurationMs: 95,
   passed: false,
   blockedReason: 'IVL 意图偏移 32%，AI 越权尝试重构（用户实际请求审查）。触发元进化五阶段循环。',
+  hardMode: true,
 }
 
 export const DECISION_LOCK_HISTORY: DecisionLockRecord[] = [
@@ -136,6 +138,7 @@ export const DECISION_LOCK_HISTORY: DecisionLockRecord[] = [
     })),
     totalDurationMs: 412,
     passed: true,
+    hardMode: true,
   },
   {
     id: 'dl-004',
@@ -147,5 +150,6 @@ export const DECISION_LOCK_HISTORY: DecisionLockRecord[] = [
     })),
     totalDurationMs: 512,
     passed: true,
+    hardMode: true,
   },
 ]

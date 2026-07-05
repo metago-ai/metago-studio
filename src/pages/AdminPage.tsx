@@ -2,17 +2,19 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
   Users, Crown, Receipt, Ticket, BarChart3, Search, RefreshCw,
-  Ban, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign,
+  Ban, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Plus, Copy,
   MessageSquare, Send, Shield, AlertTriangle, LogIn, LogOut, Lock, User,
+  Cpu,
 } from 'lucide-react'
-import { callFunction } from '../lib/cloudFunctions'
+import { callAdminHttp } from '../lib/adminHttp'
+import { AgentAdminPanel } from '../components/admin/AgentAdminPanel'
 
-type TabType = 'overview' | 'users' | 'orders' | 'licenses' | 'feedback'
+type TabType = 'overview' | 'users' | 'orders' | 'licenses' | 'feedback' | 'agent'
 
 interface Stats {
   users: { total: number; todayNew: number; todayActive: number; weekActive: number; monthActive: number }
   subscriptions: { pro: number; free: number; conversionRate: string }
-  orders: { total: number; paid: number; trial: number }
+  orders: { total: number; paid: number; proPlus: number }
   revenue: { total: number; inYuan: string }
   licenses: { total: number; used: number; available: number }
 }
@@ -41,6 +43,7 @@ interface Order {
   licenseKey?: string
   createdAt: string
   paidAt?: string
+  orderType?: 'subscription' | 'certify' | 'seats'
 }
 
 interface License {
@@ -86,6 +89,11 @@ export function AdminPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [ordersTotal, setOrdersTotal] = useState(0)
   const [licenses, setLicenses] = useState<License[]>([])
+  const [genPlan, setGenPlan] = useState<'pro' | 'team'>('pro')
+  const [genCount, setGenCount] = useState(1)
+  const [genDays, setGenDays] = useState(30)
+  const [genNote, setGenNote] = useState('')
+  const [genResult, setGenResult] = useState<{ key: string; expiresAt: string }[]>([])
   const [feedback, setFeedback] = useState<Feedback[]>([])
   const [replyText, setReplyText] = useState<Record<string, string>>({})
 
@@ -107,8 +115,8 @@ export function AdminPage() {
     setLoginLoading(true)
     setLoginError('')
     try {
-      const res = await callFunction('admin', {
-        action: 'login',
+      // 通过 HTTP 直连调用 admin 云函数（绕过 CloudBase SDK 认证）
+      const res = await callAdminHttp('login', {
         username: loginForm.username,
         password: loginForm.password,
       })
@@ -137,8 +145,7 @@ export function AdminPage() {
   }
 
   const adminCall = useCallback(async (action: string, params: Record<string, unknown> = {}) => {
-    const token = localStorage.getItem(ADMIN_TOKEN_KEY)
-    return callFunction('admin', { action, adminToken: token, ...params })
+    return callAdminHttp(action, params)
   }, [])
 
   const loadStats = useCallback(async () => {
@@ -255,6 +262,33 @@ export function AdminPage() {
     }
   }
 
+  const handleGenerateLicense = async () => {
+    setLoading(true)
+    setGenResult([])
+    try {
+      const res = await adminCall('generateLicense', {
+        plan: genPlan,
+        count: genCount,
+        durationDays: genDays,
+        note: genNote,
+      })
+      if (res.code === 0 && res.data?.licenses) {
+        setGenResult(res.data.licenses)
+        await loadLicenses()
+      } else {
+        setError(res.message || '生成失败')
+      }
+    } catch (e: any) {
+      setError(e?.message || '网络错误')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).catch(() => {})
+  }
+
   const handleReplyFeedback = async (id: string) => {
     const reply = replyText[id]
     if (!reply?.trim()) return
@@ -271,7 +305,7 @@ export function AdminPage() {
   // ========== 登录界面 ==========
   if (!loggedIn) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center">
+      <div className="min-h-screen bg-atmosphere flex items-center justify-center p-4">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
             <div className="w-16 h-16 rounded-2xl bg-accent-emerald/10 flex items-center justify-center mx-auto mb-4">
@@ -341,7 +375,7 @@ export function AdminPage() {
           </div>
 
           <p className="text-center text-xs text-zinc-600 mt-6">
-            仅限MetaGO运营团队使用 · 登录后永久有效
+            仅限MetaGO运营团队使用 · 登录后本次会话有效，请妥善保管
           </p>
         </div>
       </div>
@@ -366,11 +400,12 @@ export function AdminPage() {
     { id: 'orders', label: '订单管理', icon: Receipt },
     { id: 'licenses', label: '授权码', icon: Ticket },
     { id: 'feedback', label: '用户反馈', icon: MessageSquare },
+    { id: 'agent', label: 'Agent 管理', icon: Cpu },
   ]
 
   // ========== 管理后台主界面 ==========
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-atmosphere p-4 lg:p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -457,8 +492,8 @@ export function AdminPage() {
                   <span className="text-sm font-bold text-accent-emerald">{stats.orders.paid}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-zinc-400">试用订单</span>
-                  <span className="text-sm font-bold text-zinc-400">{stats.orders.trial}</span>
+                  <span className="text-sm text-zinc-400">Pro+ 订单</span>
+                  <span className="text-sm font-bold text-accent-violet">{stats.orders.proPlus}</span>
                 </div>
               </div>
             </div>
@@ -516,7 +551,14 @@ export function AdminPage() {
               </thead>
               <tbody>
                 {users.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-12 text-center text-zinc-600">暂无用户数据</td></tr>
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center">
+                      <p className="text-zinc-500 text-sm mb-2">暂无用户数据</p>
+                      <p className="text-zinc-600 text-xs">
+                        用户数据在用户登录 Studio 时自动同步。已注册用户需重新登录一次即可在此显示。
+                      </p>
+                    </td>
+                  </tr>
                 ) : users.map(u => (
                   <tr key={u._id} className="border-t border-border-subtle hover:bg-bg-hover/30">
                     <td className="px-4 py-3">
@@ -525,9 +567,13 @@ export function AdminPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded text-xs ${
-                        u.tier === 'pro' ? 'bg-accent-amber/20 text-accent-amber' : 'bg-zinc-700 text-zinc-400'
+                        u.tier === 'pro' ? 'bg-accent-emerald/20 text-accent-emerald'
+                        : u.tier === 'pro_plus' ? 'bg-accent-violet/20 text-accent-violet'
+                        : u.tier === 'team' ? 'bg-accent-teal/20 text-accent-teal'
+                        : u.tier === 'enterprise' ? 'bg-accent-amber/20 text-accent-amber'
+                        : 'bg-zinc-700 text-zinc-400'
                       }`}>
-                        {u.tier === 'pro' ? 'Pro' : 'Free'}
+                        {u.tier === 'pro' ? 'Pro' : u.tier === 'pro_plus' ? 'Pro+' : u.tier === 'team' ? 'Team' : u.tier === 'enterprise' ? 'Enterprise' : 'Free'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-400">
@@ -603,7 +649,7 @@ export function AdminPage() {
                     <td className="px-4 py-3 text-xs text-zinc-400">{o.openid.slice(0, 12)}...</td>
                     <td className="px-4 py-3">
                       <span className="text-xs">
-                        {o.plan === 'monthly' ? '月度' : o.plan === 'yearly' ? '年度' : '试用'}
+                        {o.plan === 'monthly' ? '月度' : o.plan === 'yearly' ? '年度' : o.plan === 'pro_plus' ? 'Pro+ 月度' : o.plan === 'pro_plus_year' ? 'Pro+ 年度' : o.plan === 'team' ? 'Team 月度' : o.plan === 'team_year' ? 'Team 年度' : o.plan === 'enterprise' ? 'Enterprise 年度' : o.orderType === 'certify' ? 'Certify 认证' : o.orderType === 'seats' ? 'Enterprise 加席' : o.plan}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs">
@@ -627,6 +673,84 @@ export function AdminPage() {
       {/* Licenses */}
       {tab === 'licenses' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+          {/* 生成授权码 */}
+          <div className="card-base p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+              <Plus className="w-4 h-4 text-accent-emerald" />
+              生成授权码
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <label className="text-xs text-zinc-500 mb-1 block">套餐</label>
+                <select
+                  value={genPlan}
+                  onChange={(e) => setGenPlan(e.target.value as 'pro' | 'team')}
+                  className="input-base text-sm"
+                >
+                  <option value="pro">Pro 个人版</option>
+                  <option value="team">Team 团队版</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500 mb-1 block">数量</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={genCount}
+                  onChange={(e) => setGenCount(Math.max(1, Math.min(50, Number(e.target.value))))}
+                  className="input-base text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500 mb-1 block">有效期（天）</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={genDays}
+                  onChange={(e) => setGenDays(Math.max(1, Math.min(365, Number(e.target.value))))}
+                  className="input-base text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500 mb-1 block">备注</label>
+                <input
+                  type="text"
+                  value={genNote}
+                  onChange={(e) => setGenNote(e.target.value)}
+                  placeholder="选填，如：合作伙伴"
+                  className="input-base text-sm"
+                />
+              </div>
+            </div>
+            <button
+              onClick={handleGenerateLicense}
+              disabled={loading}
+              className="btn-primary text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              生成 {genCount} 个{genPlan === 'team' ? 'Team' : 'Pro'}授权码
+            </button>
+            {genResult.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-accent-emerald">生成成功！点击右侧复制按钮可复制授权码：</p>
+                {genResult.map((l, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-bg-elevated/50 rounded px-3 py-2">
+                    <code className="text-xs font-mono text-accent-emerald flex-1">{l.key}</code>
+                    <span className="text-xs text-zinc-500">有效期至 {new Date(l.expiresAt).toLocaleDateString('zh-CN')}</span>
+                    <button
+                      onClick={() => copyToClipboard(l.key)}
+                      className="text-zinc-400 hover:text-accent-emerald p-1 rounded hover:bg-bg-hover"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="card-base overflow-hidden overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-bg-elevated/50">
@@ -646,7 +770,7 @@ export function AdminPage() {
                   <tr key={l._id} className="border-t border-border-subtle">
                     <td className="px-4 py-3 text-xs font-mono text-accent-emerald">{l.licenseKey}</td>
                     <td className="px-4 py-3 text-xs">
-                      {l.plan === 'monthly' ? '月度' : l.plan === 'yearly' ? '年度' : '试用'}
+                      {l.plan === 'pro' ? 'Pro' : l.plan === 'team' ? 'Team' : l.plan === 'monthly' ? '月度' : l.plan === 'yearly' ? '年度' : l.plan || '—'}
                     </td>
                     <td className="px-4 py-3">
                       <LicenseStatusBadge status={l.status} />
@@ -719,6 +843,29 @@ export function AdminPage() {
           ))}
         </motion.div>
       )}
+
+      {/* Agent 管理 */}
+      {tab === 'agent' && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-lg bg-bg-elevated border border-border-subtle"
+        >
+          <AgentAdminPanel />
+        </motion.div>
+      )}
+
+      {/* ICP 备案 */}
+      <footer className="text-center py-4 border-t border-border-subtle">
+        <a
+          href="https://beian.miit.gov.cn"
+          target="_blank"
+          rel="noreferrer"
+          className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
+        >
+          蜀ICP备2026035958号
+        </a>
+      </footer>
     </div>
   )
 }

@@ -1,0 +1,14 @@
+# MetaGO Studio robots.txt
+# 路径：https://metago.life/studio/
+
+User-agent: *
+Allow: /studio/
+
+# 爬取延迟（秒）
+Crawl-delay: 1
+
+# 站点地图
+Sitemap: https://metago.life/studio/sitemap.xml
+
+# 禁止爬取的路径
+Disallow: /studio/assets/

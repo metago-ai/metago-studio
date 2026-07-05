@@ -14,18 +14,18 @@ import type { EvolutionRecord, EvolutionStats, AbilityDimension } from '../types
 const STORAGE_KEY = 'metago_evolution_records_v1'
 const CAPABILITY_KEY = 'metago_capability_dimensions_v1'
 
-/** 默认 10 维能力评分（初始值） */
+/** 默认 10 维能力评分（新用户从零开始，随实际使用自动提升） */
 const DEFAULT_DIMENSIONS: AbilityDimension[] = [
-  { dimension: '代码', score: 60, fullMark: 100 },
-  { dimension: '架构', score: 55, fullMark: 100 },
-  { dimension: '审查', score: 50, fullMark: 100 },
-  { dimension: '设计', score: 45, fullMark: 100 },
-  { dimension: '文档', score: 65, fullMark: 100 },
-  { dimension: '测试', score: 40, fullMark: 100 },
-  { dimension: '合规', score: 50, fullMark: 100 },
-  { dimension: '安全', score: 45, fullMark: 100 },
-  { dimension: '创意', score: 70, fullMark: 100 },
-  { dimension: '沟通', score: 60, fullMark: 100 },
+  { dimension: '代码', score: 0, fullMark: 100 },
+  { dimension: '架构', score: 0, fullMark: 100 },
+  { dimension: '审查', score: 0, fullMark: 100 },
+  { dimension: '设计', score: 0, fullMark: 100 },
+  { dimension: '文档', score: 0, fullMark: 100 },
+  { dimension: '测试', score: 0, fullMark: 100 },
+  { dimension: '合规', score: 0, fullMark: 100 },
+  { dimension: '安全', score: 0, fullMark: 100 },
+  { dimension: '创意', score: 0, fullMark: 100 },
+  { dimension: '沟通', score: 0, fullMark: 100 },
 ]
 
 // ============ 持久化 ============

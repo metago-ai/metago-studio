@@ -1,9 +1,9 @@
 {
   "name": "payment",
   "version": "1.0.0",
-  "description": "MetaGO Studio - 微信支付云函数",
+  "description": "MetaGO Studio - 支付云函数（微信支付 + 支付宝 + 模拟支付）",
   "main": "index.js",
   "dependencies": {
-    "wx-server-sdk": "~2.6.3"
+    "@cloudbase/node-sdk": "^3.6.2"
   }
 }

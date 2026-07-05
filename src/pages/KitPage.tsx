@@ -22,6 +22,16 @@ const DEFAULT_KIT_CONFIG: KitConfigState = {
   vertical: 'developer',
 }
 
+/** UTF-8 安全的 Base64 编码（支持中文等非 Latin1 字符） */
+function utf8ToBase64(str: string): string {
+  const bytes = new TextEncoder().encode(str)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary)
+}
+
 export function KitPage() {
   const pendingKitSkillIds = useStore(s => s.pendingKitSkillIds)
   const setPendingKitSkillIds = useStore(s => s.setPendingKitSkillIds)
@@ -83,6 +93,16 @@ export function KitPage() {
     })
   }, [])
 
+  const reorderSkills = useCallback((from: number, to: number) => {
+    setSelectedSkillIds((prev) => {
+      if (from === to || from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }, [])
+
   const clearAll = useCallback(() => {
     setSelectedSkillIds([])
   }, [])
@@ -112,6 +132,46 @@ export function KitPage() {
     downloadFile(filename, content, 'application/json')
   }, [kitConfig, selectedSkills])
 
+  const generateInstallScript = useCallback(() => {
+    const kitJson = generateKitConfig(kitConfig, selectedSkills)
+    const base64 = utf8ToBase64(kitJson)
+    const safeName = kitConfig.name || 'my-custom-kit'
+    const dateStr = new Date().toLocaleString('zh-CN')
+    // 用数组拼接避免 PowerShell 反引号与 JS 模板字符串冲突
+    const script = [
+      `# MetaGO Kit 安装脚本 - ${safeName}`,
+      `# 自动生成于 ${dateStr}`,
+      '',
+      "$kitConfig = @'",
+      base64,
+      "'@",
+      '',
+      `Write-Host "正在安装 ${safeName}..." -ForegroundColor Cyan`,
+      '',
+      '# 1. 安装基础 Lifeform Kit',
+      'irm https://gitee.com/metago/metagolifeform/raw/main/scripts/bootstrap-install.ps1 | iex',
+      '',
+      '# 2. 解析 Kit 配置（Base64 还原为 JSON）',
+      '$bytes = [System.Convert]::FromBase64String($kitConfig)',
+      '$json = [System.Text.Encoding]::UTF8.GetString($bytes)',
+      '$config = $json | ConvertFrom-Json',
+      '',
+      '# 3. 输出 Kit 信息',
+      'Write-Host ""',
+      'Write-Host "Kit 名称: $($config.name)" -ForegroundColor Green',
+      'Write-Host "版本: $($config.version)" -ForegroundColor Green',
+      'Write-Host "包含技能:" -ForegroundColor Green',
+      'foreach ($skill in $config.skills) {',
+      '    Write-Host "  - $($skill.id)" -ForegroundColor White',
+      '}',
+      '',
+      'Write-Host ""',
+      'Write-Host "Kit 安装完成！" -ForegroundColor Green',
+    ].join('\n')
+    const filename = `install-${safeName}.ps1`
+    downloadFile(filename, script, 'text/plain')
+  }, [kitConfig, selectedSkills])
+
   const closePreview = useCallback(() => {
     setPreview((prev) => ({ ...prev, open: false }))
   }, [])
@@ -127,6 +187,7 @@ export function KitPage() {
           <Workspace
             selectedSkills={selectedSkills}
             onMove={moveSkill}
+            onReorder={reorderSkills}
             onRemove={removeSkill}
             onClear={clearAll}
           />
@@ -140,6 +201,7 @@ export function KitPage() {
             totalSize={totalSize}
             onGenerate={openPreview}
             onDownloadKit={downloadKitConfig}
+            onGenerateInstallScript={generateInstallScript}
           />
         </section>
       </main>

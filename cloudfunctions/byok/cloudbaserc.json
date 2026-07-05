@@ -1,0 +1,14 @@
+{
+  "envId": "metago-d6gfw1e4rf2a5bcad",
+  "version": "2.0",
+  "functions": [
+    {
+      "name": "byok",
+      "config": {
+        "functionName": "byok",
+        "timeout": 30,
+        "runtime": "Nodejs16.13"
+      }
+    }
+  ]
+}

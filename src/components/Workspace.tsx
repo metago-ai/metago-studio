@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   GripVertical,
   X,
@@ -13,6 +14,7 @@ import { CATEGORY_LABELS, formatBytes, getTotalSize } from '../utils/generators'
 interface WorkspaceProps {
   selectedSkills: Skill[]
   onMove: (index: number, direction: 'up' | 'down') => void
+  onReorder: (fromIndex: number, toIndex: number) => void
   onRemove: (id: string) => void
   onClear: () => void
 }
@@ -20,9 +22,13 @@ interface WorkspaceProps {
 export function Workspace({
   selectedSkills,
   onMove,
+  onReorder,
   onRemove,
   onClear,
 }: WorkspaceProps) {
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [overIndex, setOverIndex] = useState<number | null>(null)
+
   return (
     <div className="card-base flex flex-col h-full overflow-hidden">
       {/* Header */}
@@ -53,7 +59,7 @@ export function Workspace({
             </div>
             <p className="text-sm text-zinc-300 font-medium">从左侧选择技能开始组合</p>
             <p className="text-xs text-zinc-600 mt-1.5 max-w-[220px]">
-              勾选技能后会显示在此处，可使用上下箭头调整顺序
+              勾选技能后会显示在此处，可拖拽排序或使用上下箭头调整顺序
             </p>
           </div>
         ) : (
@@ -61,11 +67,25 @@ export function Workspace({
             {selectedSkills.map((skill, index) => (
               <li
                 key={skill.id}
-                className="group relative bg-bg-elevated/50 hover:bg-bg-elevated border border-border-subtle hover:border-border-default rounded-lg p-3 transition-all animate-slide-up"
+                draggable
+                onDragStart={() => setDragIndex(index)}
+                onDragOver={(e) => { e.preventDefault(); setOverIndex(index) }}
+                onDrop={() => {
+                  if (dragIndex !== null && dragIndex !== index) onReorder(dragIndex, index)
+                  setDragIndex(null); setOverIndex(null)
+                }}
+                onDragEnd={() => { setDragIndex(null); setOverIndex(null) }}
+                className={`group relative bg-bg-elevated/50 hover:bg-bg-elevated border rounded-lg p-3 transition-all animate-slide-up cursor-grab active:cursor-grabbing ${
+                  dragIndex === index
+                    ? 'opacity-40 border-accent-teal'
+                    : overIndex === index && dragIndex !== null
+                      ? 'border-accent-teal ring-1 ring-accent-teal/30'
+                      : 'border-border-subtle hover:border-border-default'
+                }`}
               >
                 <div className="flex items-start gap-2.5">
                   <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                    <GripVertical className="w-3.5 h-3.5 text-zinc-600" />
+                    <GripVertical className="w-3.5 h-3.5 text-zinc-500 group-hover:text-accent-teal transition-colors" />
                     <span className="text-xs font-mono font-semibold text-accent-emerald w-5 h-5 rounded bg-accent-emerald/10 flex items-center justify-center">
                       {index + 1}
                     </span>

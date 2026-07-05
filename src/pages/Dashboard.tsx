@@ -44,11 +44,12 @@ const ACCENT_MAP = {
 }
 
 export function Dashboard() {
-  const { skills, evolutionStats, activities, decisionLockHistory, tier, trialDaysRemaining, lockStats } = useStore()
+  const { skills, evolutionStats, activities, decisionLockHistory, tier, lockStats } = useStore()
   const { user } = useAuth()
 
   const passRate = lockStats.passRate.toFixed(1)
   const displayName = user?.displayName || user?.email || user?.phone || (user?.isAnonymous ? '探索者' : '开发者')
+  const isLoggedIn = user && !user.isAnonymous
   const maxDailyCount = Math.max(...evolutionStats.dailyCounts.map(d => d.count), 1)
 
   return (
@@ -61,7 +62,7 @@ export function Dashboard() {
       >
         <div>
           <h1 className="text-2xl font-bold text-zinc-100 flex items-center gap-2">
-            欢迎回来，{displayName}
+            {isLoggedIn ? '欢迎回来' : '欢迎'}，{displayName}
             <span className="text-2xl">👋</span>
           </h1>
           <p className="text-sm text-zinc-500 mt-1">
@@ -74,13 +75,11 @@ export function Dashboard() {
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
               tier === 'free'
                 ? 'bg-accent-amber/10 border-accent-amber/30 text-accent-amber hover:bg-accent-amber/20'
-                : tier === 'trial'
-                  ? 'bg-accent-amber/10 border-accent-amber/30 text-accent-amber'
-                  : 'bg-accent-emerald/10 border-accent-emerald/30 text-accent-emerald'
+                : 'bg-accent-emerald/10 border-accent-emerald/30 text-accent-emerald'
             }`}
           >
             <Crown className="w-3.5 h-3.5" />
-            {tier === 'free' ? '升级 Pro' : `${TIER_INFO[tier].name}${trialDaysRemaining > 0 ? ` · ${trialDaysRemaining}d` : ''}`}
+            {tier === 'free' ? '升级 Pro' : TIER_INFO[tier].name}
           </Link>
           <Link
             to="/settings"
@@ -228,7 +227,7 @@ export function Dashboard() {
             <span>© 2026 MetaGO</span>
             <span className="text-zinc-700">·</span>
             <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">
-              浙ICP备2026062766号
+              蜀ICP备2026035958号
             </a>
           </div>
           <div className="flex items-center gap-3">

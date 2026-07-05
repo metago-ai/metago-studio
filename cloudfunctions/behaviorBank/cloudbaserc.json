@@ -1,0 +1,14 @@
+{
+  "$schema": "https://static.cloudbase.net/cli/cloudbaserc.schema.json",
+  "envId": "metago-d6gfw1e4rf2a5bcad",
+  "functionRoot": ".",
+  "functions": [
+    {
+      "name": "behaviorBank",
+      "timeout": 30,
+      "runtime": "Nodejs18.15",
+      "handler": "index.main",
+      "description": "MetaGO Behavior Bank MVP - digital behavior + AI behavior + credit score + open API"
+    }
+  ]
+}

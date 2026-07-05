@@ -1,0 +1,9 @@
+{
+  "name": "behaviorBank",
+  "version": "1.0.0",
+  "description": "元构行为银行 MVP — 数字行为 + AI行为 + 信用分 + 开放API",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

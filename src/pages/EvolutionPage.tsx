@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -8,6 +8,7 @@ import {
 import {
   Dna, Download, TrendingUp, Clock, CheckCircle2, ArrowDownRight, ArrowUpRight,
   RefreshCw, GitBranch, Plus, Trash2, X,
+  Compass, Search, Sparkle, ShieldCheck, Repeat, ArrowRight,
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { exportAndDownloadJSON, exportAndDownloadMarkdown } from '../lib/evolutionArchive'
@@ -33,7 +34,28 @@ const QUICK_TRIGGERS = [
 ]
 
 export function EvolutionPage() {
-  const { evolutionRecords, evolutionStats, addEvolutionRecord, removeEvolutionRecord, features } = useStore()
+  const { evolutionRecords, evolutionStats, addEvolutionRecord, removeEvolutionRecord, features, cloudMetrics, syncMetricsFromCloud } = useStore()
+
+  // 拉取真实云端进化数据
+  useEffect(() => {
+    syncMetricsFromCloud()
+  }, [syncMetricsFromCloud])
+
+  // 真实数据优先：cloudMetrics 有进化数据时使用
+  const cm = cloudMetrics?.evolution
+  const realTotal = cm && cm.total > 0 ? cm.total : evolutionStats.totalEvolutions
+  const realSuccessRate = cm && cm.total > 0 ? cm.successRate : evolutionStats.successRate
+  const realAvgDuration = cm && cm.total > 0 ? cm.avgDuration : evolutionStats.averageDurationMs
+  const realMaxDepth = cm && cm.total > 0 ? cm.maxDepth : (evolutionRecords.length > 0 ? Math.max(...evolutionRecords.map(r => r.depth)) : 0)
+
+  // 五阶段循环统计：从真实进化记录中计算各阶段数据
+  const stageStats = {
+    boundary: evolutionRecords.filter(r => r.boundary).length,
+    gap: evolutionRecords.filter(r => r.gap).length,
+    generate: evolutionRecords.filter(r => r.generated).length,
+    verify: evolutionRecords.filter(r => r.verified).length,
+    recurse: evolutionRecords.filter(r => r.recursed).length,
+  }
   const [timeRange, setTimeRange] = useState<typeof TIME_RANGES[number]['id']>('7d')
   const [showAddModal, setShowAddModal] = useState(false)
   const [newTrigger, setNewTrigger] = useState('')
@@ -45,10 +67,6 @@ export function EvolutionPage() {
     date: d.date.slice(5), // MM-DD
     进化次数: d.count,
   }))
-
-  const maxDepth = evolutionRecords.length > 0
-    ? Math.max(...evolutionRecords.map((r) => r.depth))
-    : 0
 
   const handleAddRecord = () => {
     if (!newTrigger.trim() || !newBoundary.trim()) return
@@ -62,9 +80,9 @@ export function EvolutionPage() {
       gap: `缺少 ${newTrigger} 相关知识，需要从已知领域推断`,
       generated: `基于已有知识推断 ${newTrigger} 的语义和用法`,
       verified: true,
-      recursed: Math.random() > 0.5,
-      durationMs: Math.floor(Math.random() * 2000) + 200,
-      depth: Math.floor(Math.random() * 3) + 1,
+      recursed: false,
+      durationMs: 0,
+      depth: 1,
     }
     try {
       addEvolutionRecord(record)
@@ -151,7 +169,7 @@ export function EvolutionPage() {
             <Dna className="w-4 h-4 text-accent-teal" />
             <span className="text-xs text-zinc-500">总进化次数</span>
           </div>
-          <div className="text-2xl font-bold text-zinc-100">{evolutionStats.totalEvolutions}</div>
+          <div className="text-2xl font-bold text-zinc-100">{realTotal}</div>
         </div>
         <div className="card-base p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -159,7 +177,7 @@ export function EvolutionPage() {
             <span className="text-xs text-zinc-500">成功率</span>
           </div>
           <div className="text-2xl font-bold text-zinc-100">
-            {evolutionStats.successRate.toFixed(1)}%
+            {realSuccessRate.toFixed(1)}%
           </div>
         </div>
         <div className="card-base p-4">
@@ -168,7 +186,7 @@ export function EvolutionPage() {
             <span className="text-xs text-zinc-500">平均耗时</span>
           </div>
           <div className="text-2xl font-bold text-zinc-100">
-            {evolutionStats.averageDurationMs}ms
+            {realAvgDuration}ms
           </div>
         </div>
         <div className="card-base p-4">
@@ -177,8 +195,110 @@ export function EvolutionPage() {
             <span className="text-xs text-zinc-500">最大递归深度</span>
           </div>
           <div className="text-2xl font-bold text-zinc-100">
-            {maxDepth} 层
+            {realMaxDepth} 层
           </div>
+        </div>
+      </motion.div>
+
+      {/* 五阶段循环流程图 */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08 }}
+        className="card-base p-5"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 text-accent-teal" />
+            五阶段循环（元进化核心机制）
+          </h3>
+          <span className="text-xs text-zinc-500">
+            边界感知 → 差距分析 → 自生成 → 验证 → 递归
+          </span>
+        </div>
+        {/* 横向流程图（md+） */}
+        <div className="hidden md:flex items-start justify-between gap-1 overflow-x-auto pb-2">
+          {[
+            { id: 'boundary', name: '边界感知', fullName: 'Boundary Sensing', icon: Compass, color: 'text-accent-blue', bg: 'bg-accent-blue/10', border: 'border-accent-blue/30', count: stageStats.boundary, desc: '识别能力边界' },
+            { id: 'gap', name: '差距分析', fullName: 'Gap Analysis', icon: Search, color: 'text-accent-amber', bg: 'bg-accent-amber/10', border: 'border-accent-amber/30', count: stageStats.gap, desc: '量化差距' },
+            { id: 'generate', name: '自生成', fullName: 'Self-Generation', icon: Sparkle, color: 'text-accent-teal', bg: 'bg-accent-teal/10', border: 'border-accent-teal/30', count: stageStats.generate, desc: '生成新能力' },
+            { id: 'verify', name: '验证', fullName: 'Verification', icon: ShieldCheck, color: 'text-accent-emerald', bg: 'bg-accent-emerald/10', border: 'border-accent-emerald/30', count: stageStats.verify, desc: '验证新能力' },
+            { id: 'recurse', name: '递归', fullName: 'Recursion', icon: Repeat, color: 'text-accent-rose', bg: 'bg-accent-rose/10', border: 'border-accent-rose/30', count: stageStats.recurse, desc: '进入下一轮进化' },
+          ].map((stage, idx, arr) => {
+            const Icon = stage.icon
+            return (
+              <div key={stage.id} className="flex items-center flex-1 min-w-0">
+                <div className="flex flex-col items-center gap-2 min-w-[120px] flex-shrink-0">
+                  <div className={`relative w-14 h-14 rounded-full flex items-center justify-center border-2 ${stage.border} ${stage.bg}`}>
+                    <Icon className={`w-7 h-7 ${stage.color}`} />
+                    {stage.id === 'recurse' && (
+                      <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-accent-rose/20 flex items-center justify-center">
+                        <ArrowRight className="w-3 h-3 text-accent-rose rotate-[-45deg]" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs font-bold text-zinc-200">{stage.name}</div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5">{stage.fullName}</div>
+                    <div className="text-[10px] text-zinc-500 mt-1">{stage.desc}</div>
+                    <div className="text-xs font-bold text-zinc-300 mt-1">
+                      {stage.count} 次
+                    </div>
+                  </div>
+                </div>
+                {idx < arr.length - 1 && (
+                  <div className="flex-1 flex items-center justify-center pt-7">
+                    <div className="h-0.5 w-full bg-gradient-to-r from-accent-teal/30 to-accent-teal/30" />
+                    <ArrowRight className="w-4 h-4 -ml-1 text-accent-teal/50" />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        {/* 循环回环提示 */}
+        <div className="hidden md:flex items-center justify-center mt-3 pt-3 border-t border-border-subtle">
+          <div className="flex items-center gap-2 text-xs text-zinc-500">
+            <Repeat className="w-3 h-3 text-accent-rose/60" />
+            <span>递归阶段会触发新一轮边界感知，形成持续进化的闭环</span>
+          </div>
+        </div>
+        {/* 纵向流程图（移动端） */}
+        <div className="md:hidden space-y-3">
+          {[
+            { id: 'boundary', name: '边界感知', icon: Compass, color: 'text-accent-blue', bg: 'bg-accent-blue/10', border: 'border-accent-blue/30', count: stageStats.boundary, desc: '识别能力边界' },
+            { id: 'gap', name: '差距分析', icon: Search, color: 'text-accent-amber', bg: 'bg-accent-amber/10', border: 'border-accent-amber/30', count: stageStats.gap, desc: '量化差距' },
+            { id: 'generate', name: '自生成', icon: Sparkle, color: 'text-accent-teal', bg: 'bg-accent-teal/10', border: 'border-accent-teal/30', count: stageStats.generate, desc: '生成新能力' },
+            { id: 'verify', name: '验证', icon: ShieldCheck, color: 'text-accent-emerald', bg: 'bg-accent-emerald/10', border: 'border-accent-emerald/30', count: stageStats.verify, desc: '验证新能力' },
+            { id: 'recurse', name: '递归', icon: Repeat, color: 'text-accent-rose', bg: 'bg-accent-rose/10', border: 'border-accent-rose/30', count: stageStats.recurse, desc: '进入下一轮进化' },
+          ].map((stage, idx, arr) => {
+            const Icon = stage.icon
+            return (
+              <div key={stage.id}>
+                <div className="flex items-start gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${stage.border} ${stage.bg}`}>
+                      <Icon className={`w-5 h-5 ${stage.color}`} />
+                    </div>
+                    {idx < arr.length - 1 && <div className="w-0.5 h-6 bg-accent-teal/30" />}
+                  </div>
+                  <div className="flex-1 pt-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-zinc-200">{stage.name}</span>
+                      <span className="text-xs text-zinc-500">{stage.count} 次</span>
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-0.5">{stage.desc}</p>
+                  </div>
+                </div>
+                {idx === arr.length - 1 && (
+                  <div className="flex items-center gap-2 text-xs text-zinc-500 mt-2 pl-13">
+                    <Repeat className="w-3 h-3 text-accent-rose/60" />
+                    <span>递归触发新一轮循环</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       </motion.div>
 
@@ -192,7 +312,7 @@ export function EvolutionPage() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-accent-teal" />
-            进化曲线（近 7 天）
+            进化曲线（近 {TIME_RANGES.find(r => r.id === timeRange)?.label}）
           </h3>
           <div className="flex items-center gap-1 p-1 rounded-lg bg-bg-elevated/50">
             {TIME_RANGES.map((range) => (

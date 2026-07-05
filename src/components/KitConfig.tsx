@@ -7,6 +7,7 @@ import {
   Hash,
   HardDrive,
   Check,
+  Terminal,
 } from 'lucide-react'
 import type { KitConfigState, KitType, PreviewType, VerticalDomain } from '../types'
 import { KIT_TYPE_LABELS, VERTICAL_LABELS, formatBytes } from '../utils/generators'
@@ -18,6 +19,7 @@ interface KitConfigProps {
   totalSize: number
   onGenerate: (type: PreviewType) => void
   onDownloadKit: () => void
+  onGenerateInstallScript: () => void
 }
 
 export function KitConfig({
@@ -27,8 +29,10 @@ export function KitConfig({
   totalSize,
   onGenerate,
   onDownloadKit,
+  onGenerateInstallScript,
 }: KitConfigProps) {
   const [downloaded, setDownloaded] = useState(false)
+  const [scriptGenerated, setScriptGenerated] = useState(false)
 
   const update = <K extends keyof KitConfigState>(key: K, value: KitConfigState[K]) => {
     onChange({ ...config, [key]: value })
@@ -38,6 +42,12 @@ export function KitConfig({
     onDownloadKit()
     setDownloaded(true)
     setTimeout(() => setDownloaded(false), 1600)
+  }
+
+  const handleGenerateScript = () => {
+    onGenerateInstallScript()
+    setScriptGenerated(true)
+    setTimeout(() => setScriptGenerated(false), 1600)
   }
 
   const disabled = selectedCount === 0
@@ -170,6 +180,18 @@ export function KitConfig({
             <Download className="w-4 h-4" />
           )}
           {downloaded ? '已下载' : '下载 Kit 配置'}
+        </button>
+        <button
+          onClick={handleGenerateScript}
+          disabled={disabled}
+          className="btn-secondary w-full"
+        >
+          {scriptGenerated ? (
+            <Check className="w-4 h-4 text-accent-emerald" />
+          ) : (
+            <Terminal className="w-4 h-4" />
+          )}
+          {scriptGenerated ? '已生成' : '生成安装脚本'}
         </button>
         {disabled && (
           <p className="text-[11px] text-zinc-600 text-center pt-1">

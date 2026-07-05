@@ -327,15 +327,23 @@ function extractKeywords(text: string): string[] {
 
 /**
  * 执行决策锁强制校验
+ * @param options.hardMode true=硬校验(Pro，问题即阻断短路)，false=软校验(Free，全量检测仅警告)
  * @returns 校验记录（含四道关卡详情 + 总耗时 + 是否通过）
  */
-export function runDecisionLockValidation(input: ValidationInput): DecisionLockRecord {
+export function runDecisionLockValidation(
+  input: ValidationInput,
+  options?: { hardMode?: boolean }
+): DecisionLockRecord {
   const start = performance.now()
+  const hardMode = options?.hardMode ?? true
 
-  // 四道关卡顺序执行：任一失败即阻断（短路模式）
+  // 四道关卡顺序执行：
+  //   - 硬校验：任一失败即阻断（短路模式，后续关卡标记未执行）
+  //   - 软校验：全量执行所有关卡，问题记录但不阻断
   const stages: DecisionLockStage[] = []
   let blocked = false
   let blockedReason: string | undefined
+  let warningCount = 0
 
   const stageExecutors: { id: DecisionLockStageId; fn: (i: ValidationInput) => StageResult }[] = [
     { id: 'ivl', fn: validateIVL },
@@ -345,8 +353,8 @@ export function runDecisionLockValidation(input: ValidationInput): DecisionLockR
   ]
 
   for (const executor of stageExecutors) {
-    if (blocked) {
-      // 已阻断的关卡标记为未执行
+    if (hardMode && blocked) {
+      // 硬校验短路：已阻断的关卡标记为未执行
       stages.push({
         id: executor.id,
         name: executor.id.toUpperCase(),
@@ -369,8 +377,14 @@ export function runDecisionLockValidation(input: ValidationInput): DecisionLockR
       details: result.details,
     })
     if (!result.passed) {
-      blocked = true
-      blockedReason = result.blockReason
+      if (hardMode) {
+        // 硬校验：立即阻断
+        blocked = true
+        blockedReason = result.blockReason
+      } else {
+        // 软校验：记录警告，继续执行下一关
+        warningCount++
+      }
     }
   }
 
@@ -382,8 +396,9 @@ export function runDecisionLockValidation(input: ValidationInput): DecisionLockR
     input: input.aiOutput.slice(0, 200), // 截断存储
     stages,
     totalDurationMs,
-    passed: !blocked,
-    blockedReason,
+    passed: hardMode ? !blocked : true, // 软校验始终通过（问题仅作警告）
+    blockedReason: hardMode ? blockedReason : (warningCount > 0 ? `软校验发现 ${warningCount} 处问题（Free 版仅警告不阻断，升级 Pro 启用硬阻断）` : undefined),
+    hardMode,
   }
 }
 

@@ -1,0 +1,9 @@
+{
+  "name": "events",
+  "version": "1.0.0",
+  "description": "MetaGO Studio 统一事件上报接收器",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

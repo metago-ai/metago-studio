@@ -1,0 +1,13 @@
+{
+  "$schema": "https://static.cloudbase.net/cli/cloudbaserc.schema.json",
+  "envId": "metago-d6gfw1e4rf2a5bcad",
+  "functionRoot": "./",
+  "functions": [
+    {
+      "name": "events",
+      "timeout": 15,
+      "runtime": "Nodejs18.15",
+      "handler": "index.main"
+    }
+  ]
+}

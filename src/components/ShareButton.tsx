@@ -13,12 +13,14 @@ export function ShareButton({ data }: { data: ShareData }) {
   const [copied, setCopied] = useState<'link' | 'text' | null>(null)
 
   const generateShareLink = useCallback(() => {
-    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify({
+    // 标准 UTF-8 → Base64（替代已废弃的 escape/unescape）
+    const bytes = new TextEncoder().encode(JSON.stringify({
       t: data.type,
       s: data.title,
       c: data.content.slice(0, 2000),
       ts: Date.now(),
-    }))))
+    }))
+    const encoded = btoa(Array.from(bytes, b => String.fromCharCode(b)).join(''))
     return `${window.location.origin}${window.location.pathname}#/shared/${encoded}`
   }, [data])
 

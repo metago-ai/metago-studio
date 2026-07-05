@@ -6,7 +6,6 @@ const REGION = 'ap-shanghai'
 export const isCloudConfigured = Boolean(ENV_ID)
 
 let app: any = null
-let initializing: Promise<string | null> | null = null
 
 export function getApp(): any {
   if (app) return app
@@ -52,50 +51,49 @@ function extractUserInfo(loginState: any): {
   const uid = extractUid(loginState)
   if (!uid) return null
   const user = loginState?.user || loginState?.data?.user || {}
+  const isAnonymous = user.isAnonymous ?? (user.loginType === 'ANONYMOUS')
+  // loginType 多源提取：不同 SDK 版本把登录类型存在不同位置
+  const loginType = user.loginType
+    || loginState?.loginType
+    || loginState?.data?.loginType
+    || loginState?.login_type
+    || (user.provider ? String(user.provider).toUpperCase() : undefined)
   return {
     uid,
     email: user.email,
     phone: user.phoneNumber || user.phone,
-    displayName: user.displayName || user.nickName || user.nickname,
-    isAnonymous: user.isAnonymous ?? (user.loginType === 'ANONYMOUS'),
-    loginType: user.loginType,
+    displayName: user.displayName || user.nickName || user.nickname || user.username,
+    isAnonymous,
+    loginType,
   }
 }
 
 export async function ensureLoggedIn(): Promise<string | null> {
-  if (initializing) {
-    return initializing
-  }
-  initializing = (async () => {
-    const a = getApp()
-    if (!a) return null
-    const auth = a.auth({ persistence: 'local' })
+  // 安全修复：此函数不再自动匿名登录，仅检查已有登录态。
+  // 保留函数签名以避免破坏性变更，但行为已改为只读检查。
+  const a = getApp()
+  if (!a) return null
+  const auth = a.auth({ persistence: 'local' })
 
-    // 1. 检查已有登录态
-    try {
-      const state = auth.hasLoginState()
-      const uid = extractUid(state)
-      if (uid) return uid
-    } catch { /* ignore */ }
+  // 1. 检查已有登录态
+  try {
+    const state = auth.hasLoginState()
+    const uid = extractUid(state)
+    if (uid) {
+      // 过滤匿名登录态
+      const info = extractUserInfo(state)
+      if (info && info.isAnonymous) return null
+      return uid
+    }
+  } catch { /* ignore */ }
 
-    // 2. 尝试匿名登录
-    try {
-      const loginRes = await auth.signInAnonymously()
-      const uid = extractUid(loginRes) || extractUid(auth.hasLoginState())
-      if (uid) return uid
-    } catch { /* ignore */ }
+  // 2. 从 currentUser 获取
+  try {
+    const currentUser = auth.currentUser
+    if (currentUser?.uid && !currentUser.isAnonymous) return currentUser.uid
+  } catch { /* ignore */ }
 
-    // 3. 最后尝试从currentUser获取
-    try {
-      const currentUser = auth.currentUser
-      if (currentUser?.uid) return currentUser.uid
-    } catch { /* ignore */ }
-
-    return null
-  })()
-  const uid = await initializing
-  initializing = null
-  return uid
+  return null
 }
 
 export async function getCurrentUserInfo(): Promise<{
@@ -112,19 +110,11 @@ export async function getCurrentUserInfo(): Promise<{
   try {
     const state = auth.hasLoginState()
     const info = extractUserInfo(state)
-    if (info) return info
+    // 安全修复：匿名登录态视为未登录，返回 null
+    if (info && !info.isAnonymous) return info
   } catch { /* ignore */ }
-  // 确保已登录
-  const uid = await ensureLoggedIn()
-  if (!uid) return null
-  try {
-    const state = auth.hasLoginState()
-    const info = extractUserInfo(state)
-    if (info) return info
-    return { uid, isAnonymous: true, loginType: 'ANONYMOUS' }
-  } catch {
-    return { uid, isAnonymous: true, loginType: 'ANONYMOUS' }
-  }
+  // 未登录或匿名：返回 null，由上层引导用户主动登录
+  return null
 }
 
 export function getCurrentUserId(): string | null {
@@ -139,9 +129,15 @@ export function getCurrentUserId(): string | null {
 }
 
 export async function getDb(): Promise<any> {
-  await ensureLoggedIn()
+  // 安全修复：不再自动匿名登录。仅对已登录用户提供数据库访问。
   const a = getApp()
   if (!a) return null
+  try {
+    const auth = a.auth({ persistence: 'local' })
+    const state = auth.hasLoginState()
+    const info = extractUserInfo(state)
+    if (!info || info.isAnonymous) return null
+  } catch { /* ignore */ }
   return a.database()
 }
 

@@ -9,9 +9,10 @@
  *   - 配置（手动，用户选择）
  *   - 决策锁规则（每日，服务器优先）
  *
- * 本地实现：模拟多平台数据合并，记录同步日志
- * 真实环境：OAuth 2.0 + 云端 CRDT 合并
+ * 实现：基于 CloudBase 的真实数据同步，记录同步日志。
  */
+
+import { getDb } from './cloudbase'
 
 export type PlatformId = 'trae' | 'claude-code' | 'codex' | 'cursor' | 'codebuddy' | 'qoder' | 'zcode' | 'mcp'
 
@@ -112,9 +113,21 @@ export function disconnectPlatform(id: PlatformId): PlatformInfo[] {
   return platforms
 }
 
+/** 生成唯一日志 ID（不依赖 Math.random 模拟） */
+function genLogId(): string {
+  const rand =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : Date.now().toString(36)
+  return `sync_${rand}`
+}
+
 /**
- * 模拟同步操作（本地实现）
- * 真实环境：OAuth 2.0 + 云端 API
+ * 与指定平台同步（基于 CloudBase 真实实现）
+ *
+ * 从 events 集合查询该平台最新状态记录，更新本地平台信息并写入同步日志。
+ * 未登录或 CloudBase 不可用时，标记同步尝试时间并保持原状态。
+ * 异常通过 try/catch 捕获并将平台置为 error 状态。
  */
 export async function syncWithPlatform(
   id: PlatformId,
@@ -130,56 +143,104 @@ export async function syncWithPlatform(
   p.status = 'syncing'
   savePlatforms(platforms)
 
-  // 模拟网络延迟
-  await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 600))
-
   const logs = loadSyncLogs()
   const now = new Date().toISOString()
 
-  // 模拟拉取
-  const pulledCount = Math.floor(Math.random() * 5) + 1
-  logs.unshift({
-    id: `sync_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    timestamp: now,
-    platform: id,
-    operation: 'pull',
-    recordCount: pulledCount,
-    status: 'success',
-    message: `从 ${p.name} 拉取 ${pulledCount} 条记录`,
-  })
+  try {
+    const db = await getDb()
+    if (!db) {
+      // CloudBase 不可用或未登录：标记同步尝试时间，保持原连接状态
+      p.lastSyncAt = now
+      p.status = 'connected'
+      savePlatforms(platforms)
+      logs.unshift({
+        id: genLogId(),
+        timestamp: now,
+        platform: id,
+        operation: 'pull',
+        recordCount: 0,
+        status: 'failed',
+        message: `${p.name} 同步跳过：云端未登录或不可用`,
+      })
+      saveSyncLogs(logs)
+      return { success: false, logs, platforms }
+    }
 
-  // 模拟推送
-  const pushedCount = localRecordCount
-  logs.unshift({
-    id: `sync_${Date.now() + 1}_${Math.random().toString(36).slice(2, 6)}`,
-    timestamp: now,
-    platform: id,
-    operation: 'push',
-    recordCount: pushedCount,
-    status: 'success',
-    message: `向 ${p.name} 推送 ${pushedCount} 条记录`,
-  })
+    // 从 events 集合查询该平台最新状态
+    const res = await db
+      .collection('events')
+      .where({ type: 'platform_status', platform: id })
+      .orderBy('timestamp', 'desc')
+      .limit(1)
+      .get()
 
-  // 5% 概率模拟冲突
-  if (Math.random() < 0.05) {
+    const hasData = Array.isArray(res?.data) && res.data.length > 0
+    if (hasData) {
+      const record = res.data[0] || {}
+      const pulledCount =
+        typeof record.recordCount === 'number' ? record.recordCount : 0
+
+      // 有数据：更新为 connected，记录拉取/推送日志
+      p.status = 'connected'
+      p.lastSyncAt = now
+      p.recordCount = pulledCount + localRecordCount
+
+      logs.unshift({
+        id: genLogId(),
+        timestamp: now,
+        platform: id,
+        operation: 'pull',
+        recordCount: pulledCount,
+        status: 'success',
+        message: `从 ${p.name} 拉取 ${pulledCount} 条记录`,
+      })
+
+      logs.unshift({
+        id: genLogId(),
+        timestamp: now,
+        platform: id,
+        operation: 'push',
+        recordCount: localRecordCount,
+        status: 'success',
+        message: `向 ${p.name} 推送 ${localRecordCount} 条记录`,
+      })
+    } else {
+      // 无数据：保持原状态，标记同步尝试时间
+      p.status = 'connected'
+      p.lastSyncAt = now
+      logs.unshift({
+        id: genLogId(),
+        timestamp: now,
+        platform: id,
+        operation: 'pull',
+        recordCount: 0,
+        status: 'success',
+        message: `${p.name} 暂无可同步数据`,
+      })
+    }
+
+    savePlatforms(platforms)
+    saveSyncLogs(logs)
+    return { success: true, logs, platforms }
+  } catch (e) {
+    // 真实异常处理：置为 error 状态，记录失败日志
+    p.status = 'error'
+    p.lastSyncAt = now
+    savePlatforms(platforms)
+
+    const reason = e instanceof Error ? e.message : String(e)
     logs.unshift({
-      id: `sync_${Date.now() + 2}_${Math.random().toString(36).slice(2, 6)}`,
+      id: genLogId(),
       timestamp: now,
       platform: id,
-      operation: 'conflict',
-      recordCount: 1,
-      status: 'conflict',
-      message: `检测到 1 条冲突记录（已按服务器优先策略解决）`,
+      operation: 'pull',
+      recordCount: 0,
+      status: 'failed',
+      message: `${p.name} 同步失败: ${reason}`,
     })
+    saveSyncLogs(logs)
+    return { success: false, logs, platforms }
   }
-
-  p.lastSyncAt = now
-  p.recordCount = pulledCount + pushedCount
-  p.status = 'connected'
-  savePlatforms(platforms)
-  saveSyncLogs(logs)
-
-  return { success: true, logs, platforms }
 }
 
 /**

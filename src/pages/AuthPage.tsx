@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Mail, Phone, Code2, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Mail, Phone, Code2, ArrowRight, Loader2, AlertCircle, CheckCircle2, Sparkles, Zap, X } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 
 type Mode = 'signin' | 'signup'
@@ -9,6 +10,8 @@ type Tab = 'email' | 'phone' | 'github'
 export function AuthPage() {
   const { signInWithEmail, signUpWithEmail, signInWithGitHub, signInWithPhone, isCloudMode } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/profile'
 
   const [mode, setMode] = useState<Mode>('signin')
   const [tab, setTab] = useState<Tab>('email')
@@ -21,6 +24,92 @@ export function AuthPage() {
   const [info, setInfo] = useState<string | null>(null)
   const [codeSent, setCodeSent] = useState(false)
   const verifyFnRef = useRef<((token: string) => Promise<{ error: string | null }>) | null>(null)
+
+  // V3：注册成功后的 Pro 订阅引导（不再有试用）
+  const [justSignedUp, setJustSignedUp] = useState(false)
+
+  // 注册成功引导视图
+  if (justSignedUp) {
+    return (
+      <div className="flex items-center justify-center min-h-full py-8 px-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md"
+        >
+          {/* 成功标识 */}
+          <div className="text-center mb-6">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', delay: 0.1 }}
+              className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-accent-emerald to-accent-teal flex items-center justify-center shadow-glow mb-4"
+            >
+              <CheckCircle2 className="w-9 h-9 text-bg-deep" />
+            </motion.div>
+            <h1 className="text-2xl font-bold text-zinc-100">注册成功！</h1>
+            <p className="text-sm text-zinc-400 mt-1">欢迎加入 MetaGO Studio</p>
+          </div>
+
+          {/* Pro 订阅引导卡片（V3：替代试用） */}
+          <div className="rounded-2xl border border-accent-emerald/30 bg-gradient-to-br from-accent-emerald/10 via-bg-card to-bg-card p-6 relative overflow-hidden">
+            {/* 装饰光效 */}
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-accent-emerald/10 rounded-full blur-2xl" />
+
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="w-5 h-5 text-accent-emerald" />
+                <span className="text-xs font-semibold text-accent-emerald uppercase tracking-wider">解锁能力</span>
+              </div>
+
+              <h2 className="text-lg font-bold text-zinc-100 mb-1">订阅 Pro，开启 AI 生命体增强</h2>
+              <p className="text-xs text-zinc-400 mb-4">
+                Pro ¥39/月起 · Pro+ ¥99/月起 · 含决策锁硬校验、元进化档案、能力仪表盘
+              </p>
+
+              {/* 功能亮点 */}
+              <div className="grid grid-cols-2 gap-2 mb-5">
+                {[
+                  { icon: Zap, text: '决策锁强制校验' },
+                  { icon: Sparkles, text: '元进化档案' },
+                  { icon: Zap, text: '能力仪表盘' },
+                  { icon: Sparkles, text: '跨平台同步' },
+                ].map((f, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-xs text-zinc-300">
+                    <f.icon className="w-3.5 h-3.5 text-accent-emerald/80" />
+                    {f.text}
+                  </div>
+                ))}
+              </div>
+
+              {/* 订阅按钮 */}
+              <button
+                onClick={() => navigate('/pro')}
+                className="w-full py-3 rounded-lg bg-accent-emerald text-bg-deep font-bold text-sm hover:bg-accent-emerald/90 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-accent-emerald/20"
+              >
+                立即订阅 Pro <ArrowRight className="w-4 h-4" />
+              </button>
+
+              {/* 稍后再说 */}
+              <button
+                onClick={() => navigate(redirectTo)}
+                className="w-full mt-3 py-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                稍后再说，先逛逛
+              </button>
+            </div>
+          </div>
+
+          <button
+            onClick={() => navigate(redirectTo)}
+            className="w-full mt-4 flex items-center justify-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            <X className="w-3 h-3" /> 跳过引导
+          </button>
+        </motion.div>
+      </div>
+    )
+  }
 
   if (!isCloudMode) {
     return (
@@ -52,10 +141,9 @@ export function AuthPage() {
     if (error) {
       setError(error)
     } else if (mode === 'signup') {
-      setInfo('注册成功！已自动登录。')
-      setTimeout(() => navigate('/profile'), 1500)
+      setJustSignedUp(true)
     } else {
-      navigate('/profile')
+      navigate(redirectTo)
     }
   }
 
@@ -95,7 +183,7 @@ export function AuthPage() {
     if (error) {
       setError(error)
     } else {
-      navigate('/profile')
+      navigate(redirectTo)
     }
   }
 
@@ -273,7 +361,7 @@ export function AuthPage() {
           onClick={() => navigate('/')}
           className="w-full mt-6 text-center text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
         >
-          以游客身份继续浏览 →
+          ← 返回首页浏览
         </button>
       </div>
     </div>

@@ -1,0 +1,125 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # 推送 v* 标签触发
+  workflow_dispatch:  # 手动触发
+
+jobs:
+  build-web:
+    name: Build Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc -b --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+          retention-days: 7
+
+      - name: Run E2E tests
+        run: |
+          npx playwright install chromium
+          npx playwright test
+
+  build-windows:
+    name: Build Windows EXE
+    needs: build-web
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron Windows
+        run: npm run electron:build:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: release/MetaGO-Agent-*-win-x64.exe
+          retention-days: 30
+
+      - name: Upload latest.yml (for auto-updater)
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-manifest
+          path: release/latest.yml
+
+  deploy:
+    name: Deploy to CloudBase
+    needs: [build-web, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+
+      - name: Download Windows EXE
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-exe
+          path: release/
+
+      - name: Download update manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: update-manifest
+          path: update/
+
+      - name: Deploy Web to CloudBase
+        run: npx cloudbase hosting deploy ./dist studio --env-id metago-d6gfw1e4rf2a5bcad
+        env:
+          TCB_SECRET_ID: ${{ secrets.TCB_SECRET_ID }}
+          TCB_SECRET_KEY: ${{ secrets.TCB_SECRET_KEY }}
+
+      - name: Deploy EXE to CloudBase
+        run: npx cloudbase hosting deploy ./release download --env-id metago-d6gfw1e4rf2a5bcad
+        env:
+          TCB_SECRET_ID: ${{ secrets.TCB_SECRET_ID }}
+          TCB_SECRET_KEY: ${{ secrets.TCB_SECRET_KEY }}
+
+      - name: Deploy update manifest
+        run: npx cloudbase hosting deploy ./update update --env-id metago-d6gfw1e4rf2a5bcad
+        env:
+          TCB_SECRET_ID: ${{ secrets.TCB_SECRET_ID }}
+          TCB_SECRET_KEY: ${{ secrets.TCB_SECRET_KEY }}
+
+      - name: Deploy cloud functions
+        run: npx cloudbase fn deploy sync --env-id metago-d6gfw1e4rf2a5bcad
+        env:
+          TCB_SECRET_ID: ${{ secrets.TCB_SECRET_ID }}
+          TCB_SECRET_KEY: ${{ secrets.TCB_SECRET_KEY }}

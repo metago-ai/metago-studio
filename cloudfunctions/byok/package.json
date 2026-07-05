@@ -1,0 +1,9 @@
+{
+  "name": "byok",
+  "version": "1.0.0",
+  "description": "MetaGO Studio - BYOK 云函数（用户 API Key 绑定/解绑/验证/路由）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

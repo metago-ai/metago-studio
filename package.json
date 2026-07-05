@@ -1,23 +1,47 @@
 {
   "name": "metago-studio",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.7",
   "type": "module",
   "description": "MetaGO Studio - 可视化技能编排平台",
   "repository": {
     "type": "git",
     "url": "https://gitee.com/metago/metago-studio.git"
   },
-  "homepage": "https://gitee.com/metago/metago-studio",
+  "homepage": "https://metago.life",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:report": "playwright show-report e2e-report",
+    "postinstall": "electron-builder install-app-deps",
+    "audit": "node scripts/product-integrity-audit.cjs",
+    "audit:data": "node scripts/data-flow-audit.cjs",
+    "verify": "node scripts/pre-delivery-verify.cjs",
+    "predeploy": "npm run build && npm run verify",
+    "deploy:studio": "npm run predeploy && tcb hosting deploy ./dist studio --env-id metago-d6gfw1e4rf2a5bcad",
+    "deploy:sync": "tcb fn deploy sync --env-id metago-d6gfw1e4rf2a5bcad",
+    "deploy:admin": "tcb fn deploy admin --env-id metago-d6gfw1e4rf2a5bcad",
+    "electron:dev": "VITE_DEV_SERVER_URL=http://localhost:5173 concurrently \"vite\" \"wait-on http://localhost:5173 && tsc -p electron/tsconfig.json && electron .\"",
+    "electron:build": "vite build --config vite.electron.config.ts && tsc -p electron/tsconfig.json && node -e \"require('fs').writeFileSync('dist/electron/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && npx electron-builder --publish never",
+    "electron:build:win": "vite build --config vite.electron.config.ts && tsc -p electron/tsconfig.json && xcopy dist-electron dist\\electron\\ /E /I /Y && node -e \"require('fs').writeFileSync('dist/electron/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && npx electron-builder --win --publish never",
+    "electron:build:mac": "vite build --config vite.electron.config.ts && tsc -p electron/tsconfig.json && node -e \"require('fs').writeFileSync('dist/electron/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && npx electron-builder --mac --publish never",
+    "electron:build:linux": "vite build --config vite.electron.config.ts && tsc -p electron/tsconfig.json && node -e \"require('fs').writeFileSync('dist/electron/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && npx electron-builder --linux --publish never"
   },
   "dependencies": {
     "@cloudbase/js-sdk": "^3.6.2",
+    "@monaco-editor/react": "^4.7.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.9",
     "framer-motion": "^12.42.0",
+    "idb-keyval": "^6.2.6",
+    "isomorphic-git": "^1.38.6",
     "lucide-react": "^1.21.0",
+    "node-pty": "^1.1.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1",
@@ -25,14 +49,22 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@cloudbase/node-sdk": "^3.18.3",
+    "@electron/rebuild": "^4.1.0",
+    "@playwright/test": "^1.61.1",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.5.2",
+    "concurrently": "^9.2.3",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.19",
     "typescript": "~6.0.2",
-    "vite": "^8.1.0"
-  }
+    "vite": "^8.1.0",
+    "wait-on": "^8.0.5"
+  },
+  "main": "dist/electron/main.js"
 }
