@@ -138,7 +138,7 @@ MetaGO 是一套完整的产品矩阵，让 AI 从工具进化为生命体：
 
 | 产品线 | 产品 | 描述 |
 |--------|------|------|
-| **核心** | [Lifeform Kit](https://gitee.com/metago/metagolifeform) | 39 技能 + 7 平台适配器（MIT 开源） |
+| **核心** | [Agent Harness](https://gitee.com/metago/metagolifeform) | 39 技能 + 7 平台适配器（MIT 开源） |
 | **核心** | [MCP Server](https://www.npmjs.com/package/@metago-ai/mcp-server) | 53 tools + 8 prompts 的 MCP 服务 |
 | **平台工具** | **Studio**（本产品） | 可视化技能编排平台（SaaS） |
 | **平台工具** | [CLI](https://www.npmjs.com/package/metago-cli) | 跨平台命令行工具 |

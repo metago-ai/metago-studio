@@ -27,7 +27,7 @@ const TAG_COLORS: Record<string, string> = {
 const LIFEFORM_INSTALL_CMD = 'irm https://gitee.com/metago/metagolifeform/raw/main/scripts/bootstrap-install.ps1 | iex'
 
 const CATEGORY_SCENARIOS: Record<string, string> = {
-  core: '作为 Lifeform Kit 内置能力，在 AI 对话中自动触发或由用户手动调用',
+  core: '作为 Agent Harness 内置能力，在 AI 对话中自动触发或由用户手动调用',
   dev: '作为 Dev Kit 工程能力，在代码审查、架构设计、重构、安全审计场景中使用',
 }
 
@@ -59,7 +59,7 @@ export function SkillsPage() {
 
   const handleCopyInstall = useCallback(async () => {
     const allCmds = [
-      '# MetaGO Lifeform Kit 安装方式',
+      '# MetaGO Agent Harness 安装方式',
       '# Gitee（一键引导安装-推荐）:',
       LIFEFORM_INSTALL_CMD,
       '# npm:',

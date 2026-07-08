@@ -255,7 +255,7 @@ export function ShieldPage() {
             8 维护盾面板
           </h1>
           <p className="text-sm text-zinc-500 mt-1">
-            Agent = Model + Harness · 生命体 Harness 范式的 8 维工程化优势
+            Agent = Model + Harness · Agent Harness 范式的 8 维工程化优势
           </p>
         </div>
         <div className="flex items-center gap-3">

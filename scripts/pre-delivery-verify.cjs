@@ -236,7 +236,7 @@ async function checkV13_ArtifactScan() {
  *   旧版只检查 HTTP 200，但页面白屏（chunk 500 + 根路径被错误覆盖）。
  *   增强版检查：
  *     V2.1a Studio index.html HTTP 200 + title 含 "MetaGO Studio"
- *     V2.1b 根路径 index.html HTTP 200 + title 含 "MetaGO Lifeform Kit"（防止 Studio 覆盖官网）
+ *     V2.1b 根路径 index.html HTTP 200 + title 含 "MetaGO Agent Harness"（防止 Studio 覆盖官网）
  *     V2.1c Studio main chunk 可加载（HTTP 200 + Content-Type: application/javascript）
  *     V2.1d HTML 结构完整（含 <div id="root">）
  */
@@ -259,7 +259,7 @@ async function checkV21_WebReachable() {
   const rootStatusOk = rootRes.statusCode === 200
   const rootTitleMatch = rootRes.content?.match(/<title>(.*?)<\/title>/) || []
   const rootTitle = rootTitleMatch[1] || ''
-  const rootTitleOk = rootStatusOk && rootTitle.includes('MetaGO Lifeform Kit')
+  const rootTitleOk = rootStatusOk && rootTitle.includes('MetaGO Agent Harness')
   record('V2.1b', '根路径官网 title（防 Studio 覆盖）', rootTitleOk,
     `HTTP ${rootRes.statusCode || 'ERROR'}, title="${rootTitle.slice(0, 60)}" ${rootRes.error || ''}`)
   if (!rootTitleOk) allPassed = false

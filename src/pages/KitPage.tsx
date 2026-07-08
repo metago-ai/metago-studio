@@ -148,7 +148,7 @@ export function KitPage() {
       '',
       `Write-Host "正在安装 ${safeName}..." -ForegroundColor Cyan`,
       '',
-      '# 1. 安装基础 Lifeform Kit',
+      '# 1. 安装基础 Agent Harness',
       'irm https://gitee.com/metago/metagolifeform/raw/main/scripts/bootstrap-install.ps1 | iex',
       '',
       '# 2. 解析 Kit 配置（Base64 还原为 JSON）',

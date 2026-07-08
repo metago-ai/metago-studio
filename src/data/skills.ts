@@ -1,7 +1,7 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import type { Skill } from '../types'
 
 /**
- * MetaGO Lifeform Kit 核心技能元数据（Studio 内置展示）
+ * MetaGO Agent Harness 核心技能元数据（Studio 内置展示）
  *
  * 与 AGENTS.md 第十章《元构技能系统》完全对齐，共 39 个 metago-* 技能：
  * - 35 个核心技能（category: 'core'）
