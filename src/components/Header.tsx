@@ -22,13 +22,13 @@ const PRIMARY_NAV = [
 
 // 次要导航：收进"更多"下拉
 const MORE_NAV = [
-  { to: '/decision-lock', label: '决策锁', icon: Shield },
-  { to: '/depth-analysis', label: '深度分析', icon: Microscope },
-  { to: '/fde', label: 'FDE工作台', icon: Rocket },
-  { to: '/metrics', label: '度量', icon: Activity },
-  { to: '/behavior-bank', label: '行为银行', icon: Award },
-  { to: '/templates', label: '模板', icon: Play },
-  { to: '/kit', label: 'Kit', icon: Package },
+  { to: '/decision-lock', label: '决策锁', icon: Shield, end: false },
+  { to: '/depth-analysis', label: '深度分析', icon: Microscope, end: false },
+  { to: '/fde', label: 'FDE工作台', icon: Rocket, end: false },
+  { to: '/metrics', label: '度量', icon: Activity, end: false },
+  { to: '/behavior-bank', label: '行为银行', icon: Award, end: false },
+  { to: '/templates', label: '模板', icon: Play, end: false },
+  { to: '/kit', label: 'Kit', icon: Package, end: false },
 ]
 
 const SECONDARY_ITEMS = [
