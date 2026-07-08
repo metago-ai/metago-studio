@@ -24,10 +24,15 @@ const FACT_CHECK_PATTERNS = [
   /新闻|公告|声明|声明/,
 ]
 
-/** 用户明确要求搜索 */
+/** 用户明确要求联网搜索（必须含联网/上网/网上等明确外部信息意图，普通"搜索"不触发） */
 const EXPLICIT_SEARCH_PATTERNS = [
-  /搜索|搜一下|查一下|帮我查|查询|检索|联网|上网|网上/,
-  /\bsearch\b|\blook\s*up\b|\bfind\s*out\b|\bgoogle\b/i,
+  /联网搜索|联网查|上网搜|网上搜|网上查|帮我上网|搜一下网|在网上/,
+  /\bweb\s*search\b|\bonline\s*search\b|\bgoogle\s+it\b/i,
+]
+
+/** 代码上下文中的"搜索"不触发联网（语义搜索/grep 搜索/搜索代码都是工具调用） */
+const CODE_SEARCH_PATTERNS = [
+  /语义搜索|grep\s*搜索|搜索代码|搜索文件|search_codebase|search_files|代码库里找|代码库中找/,
 ]
 
 /** 代码审查中的高危模式（触发 CVE 搜索） */
@@ -92,6 +97,13 @@ export function decideSearch(
 
   const text = userMessage.toLowerCase()
 
+  // 0. 代码上下文中的"搜索"不触发联网（语义搜索/grep 搜索/搜索代码都是工具调用，非联网需求）
+  for (const pattern of CODE_SEARCH_PATTERNS) {
+    if (pattern.test(userMessage)) {
+      return { shouldSearch: false, reason: '代码搜索任务（语义搜索/grep/搜索代码），无需联网' }
+    }
+  }
+
   // 1. 检查不需要搜索的场景
   for (const pattern of NO_SEARCH_PATTERNS) {
     if (pattern.test(userMessage)) {
@@ -103,13 +115,13 @@ export function decideSearch(
     }
   }
 
-  // 2. 明确搜索请求
+  // 2. 明确联网搜索请求（必须含联网/上网/网上等明确外部信息意图）
   for (const pattern of EXPLICIT_SEARCH_PATTERNS) {
     if (pattern.test(userMessage)) {
       return {
         shouldSearch: true,
         query: extractSearchQuery(userMessage),
-        reason: '用户明确要求搜索',
+        reason: '用户明确要求联网搜索',
       }
     }
   }

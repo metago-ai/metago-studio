@@ -178,7 +178,7 @@ async function createOrder(event) {
   }
 
   try { await db.createCollection('orders') } catch { /* 已存在 */ }
-  await db.collection('orders').add(order)
+  await db.collection('orders').add({ data: order })
 
   console.log(`[payment] 订单创建 ${orderId} 用户 ${userId} 计划 ${planId} 金额 ${plan.price}`)
 
@@ -253,8 +253,10 @@ async function wechatNativePay(event) {
 
     if (wxRes.code_url) {
       await db.collection('orders').doc(order._id).update({
-        wxPrepayId: wxRes.prepay_id || '',
-        updatedAt: new Date(),
+        data: {
+          wxPrepayId: wxRes.prepay_id || '',
+          updatedAt: new Date(),
+        }
       })
       return { code: 0, data: { codeUrl: wxRes.code_url, orderId, amount: order.amount } }
     }
@@ -394,10 +396,12 @@ async function updateOrderAndSubscription(orderId, status, paymentChannel) {
 
   const now = new Date()
   await db.collection('orders').doc(order._id).update({
-    status,
-    paymentChannel: paymentChannel || order.paymentMethod,
-    paidAt: status === 'paid' ? now : null,
-    updatedAt: now,
+    data: {
+      status,
+      paymentChannel: paymentChannel || order.paymentMethod,
+      paidAt: status === 'paid' ? now : null,
+      updatedAt: now,
+    }
   })
 
   if (status !== 'paid') return
@@ -409,15 +413,17 @@ async function updateOrderAndSubscription(orderId, status, paymentChannel) {
   if (orderType === 'certify') {
     try { await db.createCollection('certify_orders') } catch { /* 已存在 */ }
     await db.collection('certify_orders').add({
-      userId: order.userId,
-      orderId,
-      planId: order.planId,
-      planName: order.planName,
-      level: order.planId.replace('certify_l', 'L'),
-      amount: order.amount,
-      status: 'paid',
-      paymentChannel: paymentChannel || order.paymentMethod,
-      createdAt: now,
+      data: {
+        userId: order.userId,
+        orderId,
+        planId: order.planId,
+        planName: order.planName,
+        level: order.planId.replace('certify_l', 'L'),
+        amount: order.amount,
+        status: 'paid',
+        paymentChannel: paymentChannel || order.paymentMethod,
+        createdAt: now,
+      }
     })
     console.log(`[payment] Certify 认证订单 ${orderId} 支付成功，等级 ${order.planId}`)
     return
@@ -430,8 +436,10 @@ async function updateOrderAndSubscription(orderId, status, paymentChannel) {
     if (profiles && profiles.length > 0) {
       const currentSeats = profiles[0].enterpriseSeats || 0
       await db.collection('user_profiles').doc(profiles[0]._id).update({
-        enterpriseSeats: currentSeats + 1,
-        updatedAt: now,
+        data: {
+          enterpriseSeats: currentSeats + 1,
+          updatedAt: now,
+        }
       })
     }
     console.log(`[payment] Enterprise 加席订单 ${orderId} 成功`)
@@ -454,32 +462,36 @@ async function updateOrderAndSubscription(orderId, status, paymentChannel) {
     updatedAt: now,
   }
   if (profiles && profiles.length > 0) {
-    await db.collection('user_profiles').doc(profiles[0]._id).update(profileData)
+    await db.collection('user_profiles').doc(profiles[0]._id).update({ data: profileData })
   } else {
     await db.collection('user_profiles').add({
-      openid: order.userId,
-      email: '',
-      contact: order.userId,
-      licenseKey: '',
-      createdAt: now,
-      ...profileData,
+      data: {
+        openid: order.userId,
+        email: '',
+        contact: order.userId,
+        licenseKey: '',
+        createdAt: now,
+        ...profileData,
+      }
     })
   }
 
   // 写订阅历史
   try { await db.createCollection('subscriptions') } catch { /* 已存在 */ }
   await db.collection('subscriptions').add({
-    userId: order.userId,
-    orderId,
-    planId: order.planId,
-    planName: order.planName,
-    amount: order.amount,
-    orderType,
-    tier: plan.tier,
-    paymentChannel: paymentChannel || order.paymentMethod,
-    startTime: now,
-    endTime: expiresAt,
-    createdAt: now,
+    data: {
+      userId: order.userId,
+      orderId,
+      planId: order.planId,
+      planName: order.planName,
+      amount: order.amount,
+      orderType,
+      tier: plan.tier,
+      paymentChannel: paymentChannel || order.paymentMethod,
+      startTime: now,
+      endTime: expiresAt,
+      createdAt: now,
+    }
   })
 
   console.log(`[payment] 用户 ${order.userId} 订阅 ${order.planId}（tier=${plan.tier}）成功，到期 ${expiresAt.toISOString()}`)

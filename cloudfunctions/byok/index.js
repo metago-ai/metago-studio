@@ -112,7 +112,7 @@ async function handleSyncBinding(event, openid, db, now) {
     await db.collection('byok_bindings').where({ openid }).update({ data: bindingData })
   } else {
     bindingData.createdAt = now
-    await db.collection('byok_bindings').add(bindingData)
+    await db.collection('byok_bindings').add({ data: bindingData })
   }
 
   // 同时在 user_profiles 标记 byokBound = true（供 aiProxy 快速判断）

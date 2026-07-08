@@ -159,18 +159,10 @@ export function validateLicenseKey(key: string): { valid: boolean; tier: PlanTie
   return { valid: false, tier: 'free' }
 }
 
-/**
- * 生成授权码（本地演示用，真实环境由云端生成）
- */
-export function generateLicenseKey(tier: PlanTier): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  const random = (n: number) => Array.from({ length: n }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-  const prefix = tier === 'team' ? 'METAGO-TEAM'
-    : tier === 'enterprise' ? 'METAGO-ENT'
-    : tier === 'pro_plus' ? 'METAGO-PROPLUS'
-    : 'METAGO-PRO'
-  return `${prefix}-${random(4)}-${random(4)}-${random(4)}`
-}
+// V3 安全加固（2026-07-06）：generateLicenseKey 函数已删除
+// 旧版漏洞：本地可生成有效格式授权码，任何用户都可在控制台调用激活 Pro
+// 现在：授权码只能由云端 subscription 云函数的 generateLicense action 生成（管理员权限）
+// 前端不再提供本地生成授权码的能力
 
 // ============ 持久化 ============
 
@@ -241,27 +233,18 @@ export function isPremiumUser(): boolean {
 
 // ============ 激活/取消 ============
 
-/** 激活 Pro/Pro+/Team/Enterprise 授权 */
-export function activatePro(licenseKey: string, email: string): { success: boolean; message: string; info?: LicenseInfo } {
-  const validation = validateLicenseKey(licenseKey)
-  if (!validation.valid) {
-    return { success: false, message: '授权码格式无效，应为 METAGO-PRO/PROPLUS/TEAM/ENT-XXXX-XXXX-XXXX' }
-  }
-  const now = new Date().toISOString()
-  const tier = validation.tier
-  const info: LicenseInfo = {
-    tier,
-    email,
-    licenseKey: licenseKey.trim().toUpperCase(),
-    activatedAt: now,
-    expiresAt: null, // 永久授权（云端校验过期）
-    seats: tier === 'team' ? 5 : tier === 'enterprise' ? 5 : 1,
-    teamHoursBalance: tier === 'team' ? 500 : undefined,
-    enterpriseSeats: tier === 'enterprise' ? 5 : undefined,
-  }
-  saveLicense(info)
-  return { success: true, message: `${TIER_INFO[tier].name} 激活成功`, info }
-}
+// V3 安全加固（2026-07-06）：本地 activatePro 函数已删除
+// 旧版漏洞：本地纯格式校验即可激活 Pro，用户构造 METAGO-PRO-XXXX-XXXX-XXXX 即可白嫖
+// 现在：激活只能通过 useStore.activateProAction → activateProCloud → 云端 subscription 云函数验证
+// 授权码必须在 licenses 集合中存在且状态为 unused，否则云端返回 404/410
+//
+// 保留的本地函数：
+//   - validateLicenseKey：仅做格式预检（快速反馈），不作为授权依据
+//   - saveLicense：保存云端返回的授权信息（仅缓存，权威源在云端）
+//
+// 删除的函数：
+//   - generateLicenseKey：授权码只能云端生成
+//   - activatePro：本地激活已删除，必须走云端
 
 /** 取消授权（降级到 Free） */
 export function deactivateLicense(): void {

@@ -1,16 +1,22 @@
 /**
- * Token 计量服务（V2 - 2026-07-05）
+ * Token 计量服务（V3 - 2026-07-06 安全加固版）
+ *
+ * V3 变更（修复严重漏洞）：
+ *   - 旧版 Free 档位只读 localStorage，清缓存即可重置 100K 配额，可无限白嫖
+ *   - V3 改为云端权威：所有 tier 配额查询走 aiProxy.getTokenUsage
+ *   - localStorage 仅作显示缓存（避免每次发消息都查云），真实配额以云端为准
+ *   - aiProxy.handleChat 已加服务端硬阻断，超额直接 402 拒绝（不调 LLM）
  *
  * 职责：
  *   1. 从 aiProxy 返回的 usage 字段提取 token 用量
- *   2. 本地累计（Free 用户日配额）
- *   3. 云端同步（Pro/Team 月配额）
+ *   2. 本地累计（显示缓存，非权威源）
+ *   3. 云端权威查询（所有 tier 都走 aiProxy.getTokenUsage）
  *   4. 提供"剩余额度"查询
  *   5. 触发超额警告
  *
  * 存储策略：
- *   - Free 用户：localStorage（按日累计，每天重置）
- *   - Pro/Team：云端 user_profiles.tokenUsage（按月累计，每月1日重置）
+ *   - 所有 tier：云端 user_profiles.tokenUsage（权威源）
+ *   - localStorage：仅作显示缓存，1 分钟内不重复查云
  *   - Enterprise：强制 BYOK，不计量
  */
 
@@ -122,7 +128,7 @@ function getLocalMonthlyUsage(month = monthStr()): number {
   return store.monthly[month] || 0
 }
 
-/** 查询当前配额状态 */
+/** 查询当前配额状态（V3：所有 tier 都走云端权威查询） */
 export async function getQuotaStatus(): Promise<QuotaStatus> {
   const tier = getCurrentTier()
   const plan = PRICING_PLANS[tier]
@@ -145,67 +151,63 @@ export async function getQuotaStatus(): Promise<QuotaStatus> {
 
   const byokActive = isByokActive()
 
-  if (plan.tokenQuotaPeriod === 'day') {
-    const used = getLocalDailyUsage()
-    const quota = plan.tokenQuota
-    return {
-      tier,
-      used,
-      quota,
-      remaining: Math.max(0, quota - used),
-      period: 'day',
-      resetAt: getTomorrowReset(),
-      percentage: Math.min(100, (used / quota) * 100),
-      byokActive,
-      byokRequired: false,
-      overageAllowed: false,
-      overagePricePerMillion: 0,
-    }
-  }
-
-  if (plan.tokenQuotaPeriod === 'month') {
-    const localUsed = getLocalMonthlyUsage()
-    let cloudUsed = 0
+  // V3：所有 tier（包括 free）都走云端 aiProxy.getTokenUsage 权威查询
+  // 旧版漏洞：free 只读 localStorage，清缓存即可重置 100K 配额
+  // 现在：云端 user_profiles.tokenUsage.daily 是唯一权威源
+  // V4.5（2026-07-08）：传入 licenseKey 作为 fallback，解决 openid 不匹配问题
+  let cloudUsed = 0
+  let cloudQuota = plan.tokenQuota
+  let cloudPeriod: 'day' | 'month' | 'year' = plan.tokenQuotaPeriod
+  let cloudTier = tier
+  try {
+    // 从 localStorage 读取 licenseKey，用于 openid 不匹配时的 fallback
+    let licenseKey: string | undefined
     try {
-      const res = await callFunction<{ used: number }>('subscription', {
-        action: 'getTokenUsage',
-      })
-      if (res.code === 0 && res.data) {
-        cloudUsed = res.data.used || 0
+      const raw = localStorage.getItem('metago_pro_license_v3')
+      if (raw) {
+        const info = JSON.parse(raw)
+        licenseKey = info.licenseKey
       }
-    } catch (e) {
-      console.warn('[tokenMeter] 云端配额查询失败，使用本地数据', e)
-    }
+    } catch { /* ignore */ }
 
-    const used = Math.max(localUsed, cloudUsed)
-    const quota = plan.tokenQuota
-    return {
-      tier,
-      used,
-      quota,
-      remaining: Math.max(0, quota - used),
-      period: 'month',
-      resetAt: getMonthReset(),
-      percentage: Math.min(100, (used / quota) * 100),
-      byokActive,
-      byokRequired: false,
-      overageAllowed: plan.overagePricePerMillion > 0,
-      overagePricePerMillion: plan.overagePricePerMillion,
+    const res = await callFunction<{
+      used: number
+      quota: number
+      remaining: number
+      tier: string
+      period: 'day' | 'month' | 'year'
+    }>('aiProxy', { action: 'getTokenUsage', ...(licenseKey ? { licenseKey } : {}) })
+    if (res.code === 0 && res.data) {
+      cloudUsed = res.data.used || 0
+      cloudQuota = res.data.quota || plan.tokenQuota
+      cloudPeriod = res.data.period || plan.tokenQuotaPeriod
+      cloudTier = (res.data.tier as PlanTier) || tier
     }
+  } catch (e) {
+    console.warn('[tokenMeter] 云端配额查询失败，降级本地缓存', e)
+    // 降级方案：用本地缓存（仅作显示，真实阻断由服务端保证）
+    const localUsed = cloudPeriod === 'day' ? getLocalDailyUsage() : getLocalMonthlyUsage()
+    cloudUsed = localUsed
   }
+
+  // 同步本地缓存（用于离线显示，非权威）
+  const used = cloudUsed
+  const quota = cloudQuota
+  const period = cloudPeriod
+  const resetAt = period === 'day' ? getTomorrowReset() : period === 'month' ? getMonthReset() : ''
 
   return {
-    tier,
-    used: 0,
-    quota: 0,
-    remaining: 0,
-    period: 'year',
-    resetAt: '',
-    percentage: 0,
+    tier: cloudTier,
+    used,
+    quota,
+    remaining: Math.max(0, quota - used),
+    period,
+    resetAt,
+    percentage: quota > 0 ? Math.min(100, (used / quota) * 100) : 0,
     byokActive,
     byokRequired: false,
-    overageAllowed: false,
-    overagePricePerMillion: 0,
+    overageAllowed: plan.overagePricePerMillion > 0 && period === 'month',
+    overagePricePerMillion: plan.overagePricePerMillion,
   }
 }
 

@@ -17,6 +17,7 @@ import { Zap, AlertTriangle, Key, Infinity as InfinityIcon } from 'lucide-react'
 import { checkQuota, type QuotaInfo } from '../../lib/userService'
 import { isByokActive, isByokRequired } from '../../lib/byokService'
 import { TIER_INFO } from '../../lib/proGate'
+import { useStore } from '../../store/useStore'
 
 interface TokenUsageWidgetProps {
   onUpgradeClick?: () => void
@@ -26,6 +27,7 @@ interface TokenUsageWidgetProps {
 export function TokenUsageWidget({ onUpgradeClick, onByokClick }: TokenUsageWidgetProps) {
   const [quota, setQuota] = useState<QuotaInfo | null>(null)
   const [loading, setLoading] = useState(true)
+  const license = useStore(s => s.license)
 
   useEffect(() => {
     let mounted = true
@@ -42,13 +44,12 @@ export function TokenUsageWidget({ onUpgradeClick, onByokClick }: TokenUsageWidg
       }
     }
     load()
-    // 每 60s 刷新一次
     const interval = setInterval(load, 60_000)
     return () => {
       mounted = false
       clearInterval(interval)
     }
-  }, [])
+  }, [license])
 
   // Enterprise 强制 BYOK
   if (isByokRequired()) {

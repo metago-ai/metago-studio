@@ -1,7 +1,7 @@
 {
   "name": "metago-studio",
   "private": true,
-  "version": "1.1.7",
+  "version": "1.1.9",
   "type": "module",
   "description": "MetaGO Studio - 可视化技能编排平台",
   "repository": {
@@ -20,7 +20,7 @@
     "audit": "node scripts/product-integrity-audit.cjs",
     "audit:data": "node scripts/data-flow-audit.cjs",
     "verify": "node scripts/pre-delivery-verify.cjs",
-    "predeploy": "npm run build && npm run verify",
+    "predeploy": "npm run build && node scripts/generate-spa-fallback.cjs && npm run verify",
     "deploy:studio": "npm run predeploy && tcb hosting deploy ./dist studio --env-id metago-d6gfw1e4rf2a5bcad",
     "deploy:sync": "tcb fn deploy sync --env-id metago-d6gfw1e4rf2a5bcad",
     "deploy:admin": "tcb fn deploy admin --env-id metago-d6gfw1e4rf2a5bcad",
@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@cloudbase/js-sdk": "^3.6.2",
+    "@metago-ai/engine": "^2.0.0",
     "@monaco-editor/react": "^4.7.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",

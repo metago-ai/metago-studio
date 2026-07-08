@@ -371,7 +371,7 @@ export function SettingsPage() {
         animate={{ opacity: 1 }}
         className="text-center text-xs text-zinc-600 py-4"
       >
-        MetaGO Studio Pro v1.1.7 · 基于《元构全息智能引擎》V36.6
+        MetaGO Studio Pro v1.1.9 · 基于《元构全息智能引擎》V36.6
         <br />
         元构光年（成都）人工智能科技有限公司 © 2026
       </motion.div>

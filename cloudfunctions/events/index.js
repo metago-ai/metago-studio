@@ -32,9 +32,15 @@ exports.main = async (event, context) => {
 
   // 身份识别（兼容 Web SDK 的 UID + 前端注入的 _clientUid）
   const wxContext = cloud.getWXContext()
-  const openid = wxContext.OPENID || wxContext.UID || wxContext.APPID
-    || event.userInfo?.openid || event.userInfo?.openId || event.userInfo?.uid
-    || event.openid || event.uid || event._clientUid
+  const openid = event._clientUid
+    || event.uid
+    || event.openid
+    || event.userInfo?.uid
+    || event.userInfo?.openId
+    || event.userInfo?.openid
+    || wxContext.OPENID
+    || wxContext.UID
+    || wxContext.APPID
 
   // allowAnonymous: submitEvent 允许匿名上报（MCP Server 用 adminToken 认证）
   const action = event.action
@@ -127,10 +133,12 @@ exports.main = async (event, context) => {
       case 'getMetrics': {
         const days = event.days || 30
         const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+        // adminToken 模式：查询所有用户数据（管理员看板用）；否则按 uid 过滤
+        const uidFilter = isAdmin ? {} : { uid: targetUid }
 
-        // 决策锁统计
+        // 决策锁统计（adminToken 模式查询所有用户，否则按 uid 过滤）
         const dlEvents = await db.collection('events')
-          .where({ uid: targetUid, type: 'decision_lock', timestamp: _.gte(since) })
+          .where({ ...uidFilter, type: 'decision_lock', timestamp: _.gte(since) })
           .limit(500)
           .get()
         const dlPassed = dlEvents.data.filter(e => e.data?.passed).length
@@ -139,30 +147,19 @@ exports.main = async (event, context) => {
 
         // 进化统计
         const evoEvents = await db.collection('events')
-          .where({ uid: targetUid, type: 'evolution', timestamp: _.gte(since) })
+          .where({ ...uidFilter, type: 'evolution', timestamp: _.gte(since) })
           .limit(500)
           .get()
         const evoSuccess = evoEvents.data.filter(e => e.data?.verified).length
 
         // 技能调用统计
         const skillEvents = await db.collection('events')
-          .where({ uid: targetUid, type: 'skill_usage', timestamp: _.gte(since) })
+          .where({ ...uidFilter, type: 'skill_usage', timestamp: _.gte(since) })
           .limit(500)
           .get()
         const skillSet = new Set(skillEvents.data.map(e => e.data?.skillId).filter(Boolean))
 
-        // 平台统计
-        const platformEvents = await db.collection('events')
-          .where({ uid: targetUid, timestamp: _.gte(since) })
-          .limit(1000)
-          .get()
-        const platformMap = {}
-        platformEvents.data.forEach(e => {
-          const p = e.platform || 'unknown'
-          platformMap[p] = (platformMap[p] || 0) + 1
-        })
-
-        // 关卡阻断分布
+        // 决策锁关卡阻断分布（前置：shieldDimensions.reliability 需要）
         const stageBlocks = {}
         dlEvents.data.forEach(e => {
           if (e.data?.stages) {
@@ -172,6 +169,105 @@ exports.main = async (event, context) => {
               }
             })
           }
+        })
+
+        // 维度-技能映射（8维护盾各维度包含的技能）
+        const DIMENSION_SKILLS = {
+          traceability: ['metago_data_provenance', 'metago_problem_trace', 'metago_fact_check'],
+          objectivity: ['metago_critique', 'metago_objectivity', 'metago_emotion'],
+          compliance: ['metago_compliance', 'metago_value_align', 'metago_security_audit'],
+          integrity: ['metago_output_integrity', 'metago_delivery_gate', 'metago_discipline', 'metago_self_check'],
+          lifeform: ['metago_activate', 'metago_meta_evolve', 'metago_meta_create', 'metago_memory_manage', 'metago_frequency_adapt'],
+        }
+
+        // 按技能统计调用次数、成功次数、最后调用时间
+        const skillStats = {}
+        skillEvents.data.forEach(e => {
+          const sid = e.data?.skillId
+          if (!sid) return
+          if (!skillStats[sid]) {
+            skillStats[sid] = { count: 0, successCount: 0, lastCalled: null }
+          }
+          skillStats[sid].count++
+          if (e.data?.success !== false) skillStats[sid].successCount++
+          const ts = e.timestamp ? new Date(e.timestamp) : null
+          if (ts && (!skillStats[sid].lastCalled || ts > new Date(skillStats[sid].lastCalled))) {
+            skillStats[sid].lastCalled = e.timestamp
+          }
+        })
+
+        // 时间排序辅助
+        const sortByTimeDesc = (arr) => arr.slice().sort((a, b) => {
+          const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0
+          const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0
+          return tb - ta
+        })
+
+        // 按维度聚合详细数据（P1 深度分析面板数据源）
+        function buildDimension(skillIds) {
+          const dimEvents = skillEvents.data.filter(e => skillIds.includes(e.data?.skillId))
+          const skills = {}
+          skillIds.forEach(sid => {
+            if (skillStats[sid]) skills[sid] = skillStats[sid]
+          })
+          const recentCalls = sortByTimeDesc(dimEvents).slice(0, 5).map(e => ({
+            skillId: e.data?.skillId,
+            timestamp: e.timestamp,
+            success: e.data?.success !== false,
+            duration: e.data?.duration || 0,
+          }))
+          const successCount = dimEvents.filter(e => e.data?.success !== false).length
+          return {
+            callCount: dimEvents.length,
+            successCount,
+            successRate: dimEvents.length > 0 ? Math.round((successCount / dimEvents.length) * 100) : 0,
+            skills,
+            recentCalls,
+          }
+        }
+
+        // 8维护盾聚合（含详细数据，P1 面板数据源）
+        const shieldDimensions = {
+          reliability: {
+            callCount: dlTotal,
+            passRate: dlTotal > 0 ? Math.round((dlPassed / dlTotal) * 100) : 0,
+            blocked: dlBlocked,
+            stageBlocks,
+            recentCalls: sortByTimeDesc(dlEvents.data).slice(0, 5).map(e => ({
+              passed: e.data?.passed,
+              stages: e.data?.stages,
+              timestamp: e.timestamp,
+            })),
+          },
+          evolution: {
+            callCount: evoEvents.data.length,
+            successRate: evoEvents.data.length > 0
+              ? Math.round((evoSuccess / evoEvents.data.length) * 100) : 0,
+            maxDepth: Math.max(0, ...evoEvents.data.map(e => e.data?.depth || 0)),
+            recentCalls: sortByTimeDesc(evoEvents.data).slice(0, 5).map(e => ({
+              trigger: e.data?.trigger,
+              boundary: e.data?.boundary,
+              verified: e.data?.verified,
+              depth: e.data?.depth || 1,
+              timestamp: e.timestamp,
+            })),
+          },
+          traceability: buildDimension(DIMENSION_SKILLS.traceability),
+          objectivity: buildDimension(DIMENSION_SKILLS.objectivity),
+          compliance: buildDimension(DIMENSION_SKILLS.compliance),
+          integrity: buildDimension(DIMENSION_SKILLS.integrity),
+          lifeform: buildDimension(DIMENSION_SKILLS.lifeform),
+        }
+
+        // 平台统计
+        const platformEvents = await db.collection('events')
+          .where({ ...uidFilter, timestamp: _.gte(since) })
+          .limit(1000)
+          .get()
+        const platformMap = {}
+        platformEvents.data.forEach(e => {
+          const p = e.platform || 'unknown'
+          platformMap[p] = (platformMap[p] || 0) + 1
         })
 
         return {
@@ -195,8 +291,9 @@ exports.main = async (event, context) => {
             skills: {
               uniqueUsed: skillSet.size,
               totalCalls: skillEvents.data.length,
-              coverage: Math.round((skillSet.size / 37) * 100),
+              coverage: Math.round((skillSet.size / 39) * 100),
             },
+            shieldDimensions,
             platforms: platformMap,
             recentEvents: platformEvents.data.slice(0, 10),
           },
@@ -236,8 +333,10 @@ exports.main = async (event, context) => {
 
   async function syncEvolutionRecord(uid, evoData) {
     try {
+      const now = new Date()
       await db.collection('evolution_records').add({
         data: {
+          _openid: uid,
           uid,
           trigger: evoData.trigger || '',
           boundary: evoData.boundary || '',
@@ -248,7 +347,8 @@ exports.main = async (event, context) => {
           depth: evoData.depth || 1,
           durationMs: evoData.durationMs || 0,
           source: 'auto_report',
-          createdAt: new Date(),
+          created_at: now.toISOString(),
+          createdAt: now,
         }
       })
     } catch (e) {

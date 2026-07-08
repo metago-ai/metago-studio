@@ -10,7 +10,7 @@
 import { useState, useEffect } from 'react'
 import { Download, X, Monitor } from 'lucide-react'
 
-const APP_VERSION = '1.1.7'
+const APP_VERSION = '1.1.9'
 /** 官方域名下载根路径（绑定 metago.life） */
 const DOWNLOAD_BASE = `https://metago.life/download`
 

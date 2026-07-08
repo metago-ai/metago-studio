@@ -3,6 +3,7 @@ import type { DecisionLockRecord, EvolutionRecord, Activity, BehaviorRecord, Beh
 import { EVOLUTION_STATS } from '../data/evolution'
 import { SCENE_TEMPLATES } from '../data/templates'
 import { SKILLS } from '../data/skills'
+import { sendSimpleChat } from '../lib/aiClient'
 import {
   loadRecords as loadEvolutionRecords,
   addRecord as addRecordToArchive,
@@ -123,6 +124,14 @@ interface MetaGOStore {
   addEvolutionRecord: (record: EvolutionRecord) => void
   removeEvolutionRecord: (id: string) => void
   clearEvolutionRecords: () => void
+  /** 真实元进化：调用 AI 执行五阶段循环，返回真实 gap/generated/verified */
+  triggerRealEvolution: (trigger: string, boundary: string) => Promise<{
+    success: boolean
+    message: string
+    record?: EvolutionRecord
+  }>
+  /** 从 Agent 对话的 MCP 工具调用中捕获元进化记录 */
+  captureEvolutionFromToolCall: (toolName: string, toolArgs: Record<string, unknown>, toolResult: string) => void
 
   // 私有技能操作
   addPrivateSkillAction: (
@@ -325,6 +334,11 @@ export const useStore = create<MetaGOStore>((set, get) => ({
       features: getFeatureFlags(),
       trialDaysRemaining: 0,
     })
+    // 激活成功后刷新云端配额（修复：激活后配额显示未更新）
+    try {
+      const { getQuotaStatus } = await import('../lib/tokenMeter')
+      await getQuotaStatus()
+    } catch { /* 非阻塞 */ }
     return { success: true, message: res.message }
   },
   deactivate: () => {
@@ -424,6 +438,179 @@ export const useStore = create<MetaGOStore>((set, get) => ({
       evolutionRecords: [],
       evolutionStats: calculateEvolutionStats([]),
     })
+  },
+
+  // 真实元进化：调用 AI 执行五阶段循环
+  triggerRealEvolution: async (trigger, boundary) => {
+    const startTime = Date.now()
+    try {
+      const systemPrompt = `你是 MetaGO 元构超级智能生命体，现在执行元进化五阶段循环（metago_meta_evolve）。
+
+## 触发条件
+- 能力边界：${boundary}
+- 触发器：${trigger}
+
+## 五阶段循环协议（必须严格执行）
+
+### 1. 边界感知（Boundary Sensing）
+明确"我不知道什么"，边界的具体形态是什么。
+
+### 2. 差距分析（Gap Analysis）
+现有能力 vs 所需能力的差距，差距的本质（知识/工具/权限）。
+
+### 3. 自生成（Self-Generation）
+基于现有能力组合出新的解决路径，不依赖外部数据输入（A5 内生公理）。
+
+### 4. 验证（Verification）
+新能力是否真的解决了问题？副作用评估。
+
+### 5. 递归（Recursion）
+这个新能力是否触发了新的边界？是否需要进入下一轮循环？
+
+## 输出格式（必须严格遵守）
+你必须返回一个 JSON 对象，包含以下字段：
+
+\`\`\`json
+{
+  "boundary": "边界感知结果（具体描述能力边界的形态）",
+  "gap": "差距分析结果（现有能力与所需能力的真实差距）",
+  "generated": "自生成结果（基于现有能力组合出的新解决路径）",
+  "verified": true/false,
+  "verification_detail": "验证结果详情",
+  "recursed": true/false,
+  "recursion_reason": "是否需要递归及原因"
+}
+\`\`\`
+
+只返回 JSON，不要其他内容。`
+
+      const userMessage = `执行元进化循环。
+
+触发器（能力领域）：${trigger}
+能力边界（遇到什么不会做）：${boundary}
+
+请严格按五阶段循环协议执行，返回 JSON 格式结果。`
+
+      const aiResponse = await sendSimpleChat(
+        [
+          { role: 'user', content: userMessage },
+        ],
+        'deepseek-v4-pro',
+        systemPrompt,
+      )
+
+      const durationMs = Date.now() - startTime
+
+      // 解析 AI 返回的 JSON
+      let parsed: {
+        boundary?: string
+        gap?: string
+        generated?: string
+        verified?: boolean
+        verification_detail?: string
+        recursed?: boolean
+        recursion_reason?: string
+      }
+
+      try {
+        // 尝试从响应中提取 JSON
+        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/)
+        const jsonStr = jsonMatch ? jsonMatch[0] : aiResponse
+        // 清理 AI 返回的 JSON 中可能的不合法转义字符（如 \ + 换行符）
+        const cleanedJson = jsonStr
+          .replace(/\\(\r?\n)/g, '\\n')
+          .replace(/\\([^"\\\/bfnrtu])/g, '\\\\$1')
+        try {
+          parsed = JSON.parse(cleanedJson)
+        } catch {
+          // 清理后仍失败，用正则逐字段提取（兼容 AI 返回的不规范 JSON）
+          const extractStr = (field: string): string => {
+            const m = jsonStr.match(new RegExp(`"${field}"\\s*:\\s*"([\\s\\S]*?)"\\s*(?:,|}|$)`, 'i'))
+            if (!m) return ''
+            return m[1]
+              .replace(/\\n/g, '\n')
+              .replace(/\\\"/g, '"')
+              .replace(/\\\\/g, '\\')
+              .replace(/\\\r?\n/g, '')
+          }
+          parsed = {
+            boundary: extractStr('boundary') || boundary,
+            gap: extractStr('gap') || aiResponse.slice(0, 200),
+            generated: extractStr('generated') || 'AI 返回格式异常，无法解析自生成结果',
+            verification_detail: extractStr('verification_detail'),
+            recursion_reason: extractStr('recursion_reason'),
+            verified: /"verified"\s*:\s*true/i.test(jsonStr),
+            recursed: /"recursed"\s*:\s*true/i.test(jsonStr),
+          }
+        }
+      } catch {
+        // 所有解析方式都失败
+        parsed = {
+          boundary: boundary,
+          gap: aiResponse.slice(0, 200),
+          generated: 'AI 返回格式异常，无法解析自生成结果',
+          verified: false,
+          recursed: false,
+        }
+      }
+
+      const record: EvolutionRecord = {
+        id: `evo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        trigger,
+        boundary: parsed.boundary || boundary,
+        gap: parsed.gap || '差距分析未返回',
+        generated: parsed.generated || '自生成未返回',
+        verified: Boolean(parsed.verified),
+        recursed: Boolean(parsed.recursed),
+        durationMs,
+        depth: parsed.recursed ? 2 : 1,
+      }
+
+      // 使用 addEvolutionRecord 保存（会自动同步到云端和 events 集合）
+      get().addEvolutionRecord(record)
+
+      return {
+        success: true,
+        message: `元进化完成（${durationMs}ms）：${parsed.generated?.slice(0, 60) || '已生成新能力'}`,
+        record,
+      }
+    } catch (e) {
+      const durationMs = Date.now() - startTime
+      return {
+        success: false,
+        message: `元进化失败（${durationMs}ms）：${e instanceof Error ? e.message : String(e)}`,
+      }
+    }
+  },
+
+  // 从 Agent 对话的 MCP 工具调用中捕获元进化记录
+  captureEvolutionFromToolCall: (toolName, toolArgs, toolResult) => {
+    // 只捕获元进化相关工具
+    if (toolName !== 'metago_meta_evolve' && toolName !== 'metago_meta_create') return
+
+    const text = (toolArgs.text as string) || (toolArgs.scenario as string) || ''
+    if (!text) return
+
+    // 从工具结果中提取关键信息（结果是 "summary\n\nprotocol" 格式）
+    const resultLines = toolResult.split('\n')
+    const summary = resultLines[0] || '元进化触发'
+
+    // 创建进化记录（从 Agent 对话中捕获的）
+    const record: EvolutionRecord = {
+      id: `evo_agent_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      trigger: text.slice(0, 100),
+      boundary: 'Agent 对话中触发（自动捕获）',
+      gap: summary,
+      generated: 'AI 在对话中应用了元进化协议（详见对话记录）',
+      verified: true,
+      recursed: false,
+      durationMs: 0,
+      depth: 1,
+    }
+
+    get().addEvolutionRecord(record)
   },
 
   // 私有技能操作

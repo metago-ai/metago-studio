@@ -133,13 +133,15 @@ exports.main = async (event) => {
       // 更新用户档案
       const now = new Date()
       await db.collection('user_profiles').where({ openid }).update({
-        githubId: ghUser.id,
-        githubLogin: ghUser.login,
-        githubAvatar: ghUser.avatar_url,
-        displayName: ghUser.name || ghUser.login,
-        email: email,
-        githubLinkedAt: now,
-        updatedAt: now,
+        data: {
+          githubId: ghUser.id,
+          githubLogin: ghUser.login,
+          githubAvatar: ghUser.avatar_url,
+          displayName: ghUser.name || ghUser.login,
+          email: email,
+          githubLinkedAt: now,
+          updatedAt: now,
+        }
       })
 
       return {
@@ -156,11 +158,13 @@ exports.main = async (event) => {
 
     case 'unlink': {
       await db.collection('user_profiles').where({ openid }).update({
-        githubId: null,
-        githubLogin: null,
-        githubAvatar: null,
-        githubLinkedAt: null,
-        updatedAt: new Date(),
+        data: {
+          githubId: null,
+          githubLogin: null,
+          githubAvatar: null,
+          githubLinkedAt: null,
+          updatedAt: new Date(),
+        }
       })
       return { code: 0, message: '已解绑GitHub' }
     }

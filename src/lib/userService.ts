@@ -14,7 +14,7 @@
 
 import { callFunction } from './cloudFunctions'
 import { getCurrentTier } from './proGate'
-import { PRICING_PLANS, FREE_DAILY_TOKEN_QUOTA } from './pricing'
+import { PRICING_PLANS } from './pricing'
 import { getQuotaStatus as getTokenQuotaStatus, type QuotaStatus } from './tokenMeter'
 
 export interface UserProfile {
@@ -159,17 +159,18 @@ export function logout() {
 // ============ 本地配额（未登录降级方案）============
 
 function getLocalQuota(): QuotaInfo {
-  const tier = getCurrentTier() // 未登录时为 'free'
+  const tier = getCurrentTier()
   const plan = PRICING_PLANS[tier]
-  const used = getLocalDailyUsage()
-  const quota = plan.tokenQuotaPeriod === 'day' ? plan.tokenQuota : FREE_DAILY_TOKEN_QUOTA
+  const period = plan.tokenQuotaPeriod
+  const used = period === 'day' ? getLocalDailyUsage() : getLocalMonthlyUsage()
+  const quota = plan.tokenQuota
   return {
     remaining: Math.max(0, quota - used),
     total: quota,
     used,
     tier,
     isUnlimited: false,
-    period: 'day',
+    period,
     byokActive: false,
     count: used,
   }
@@ -183,6 +184,17 @@ function getLocalDailyUsage(date = new Date().toISOString().slice(0, 10)): numbe
     if (!raw) return 0
     const store = JSON.parse(raw) as { daily?: Record<string, number> }
     return store.daily?.[date] || 0
+  } catch {
+    return 0
+  }
+}
+
+function getLocalMonthlyUsage(month = new Date().toISOString().slice(0, 7)): number {
+  try {
+    const raw = localStorage.getItem(LOCAL_USAGE_KEY)
+    if (!raw) return 0
+    const store = JSON.parse(raw) as { monthly?: Record<string, number> }
+    return store.monthly?.[month] || 0
   } catch {
     return 0
   }

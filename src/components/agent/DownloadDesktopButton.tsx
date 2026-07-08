@@ -14,7 +14,7 @@
 import { useState, useEffect } from 'react'
 import { Download, Monitor, X, Check, AlertCircle, Terminal, Folder, GitBranch, Zap, Wifi } from 'lucide-react'
 
-const APP_VERSION = '1.1.7'
+const APP_VERSION = '1.1.9'
 const DOWNLOAD_BASE = `https://metago.life/download`
 
 interface PlatformAsset {
@@ -43,8 +43,8 @@ const COMPARISON_ROWS: Array<{
   icon: typeof Terminal
 }> = [
   { category: 'AI 核心', feature: 'AI 对话与多轮任务', web: 'full', desktop: 'full', icon: Zap },
-  { category: 'AI 核心', feature: '39 个 MCP 工具调用', web: 'full', desktop: 'full', icon: Zap },
-  { category: 'AI 核心', feature: '39 个元构技能激活', web: 'full', desktop: 'full', icon: Zap },
+  { category: 'AI 核心', feature: '53 个元构 MCP 工具（22思维+37技能去重+1事件上报）', web: 'full', desktop: 'full', icon: Zap },
+  { category: 'AI 核心', feature: '20 个工程工具（文件/Git/Shell/任务/部署/子代理/流式编辑）', web: 'partial', desktop: 'full', icon: Zap },
   { category: '编辑器', feature: 'Monaco 代码编辑器', web: 'full', desktop: 'full', icon: Terminal },
   { category: '文件系统', feature: '文件树 / 读写', web: 'partial', desktop: 'full', icon: Folder },
   { category: '文件系统', feature: '真实本地文件系统', web: 'none', desktop: 'full', icon: Folder },
@@ -157,7 +157,7 @@ function DownloadModal({ onClose, platform }: { onClose: () => void; platform: P
               </div>
             )}
             <div className="text-[10px] text-zinc-600 mt-2">
-              约 88 MB · 安装后自动更新
+              88.62 MB · 安装后自动更新
             </div>
           </div>
 

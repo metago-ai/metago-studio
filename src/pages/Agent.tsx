@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Bot, FolderOpen, PanelBottomClose, PanelBottomOpen,
   Search, GitBranch, Files, AlertCircle, TriangleAlert,
-  Zap, Wrench, History as HistoryIcon, Globe,
+  Zap, Wrench, History as HistoryIcon, Globe, Sparkles, X,
   PanelRightClose, PanelRightOpen, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import { FileTree } from '../components/agent/FileTree'
@@ -22,11 +22,14 @@ import { FileTabs, type OpenTab } from '../components/agent/FileTabs'
 import { CommandPalette } from '../components/agent/CommandPalette'
 import { DiffView } from '../components/agent/DiffView'
 import { PreviewPanel } from '../components/agent/PreviewPanel'
+import { InlineEditPanel } from '../components/agent/InlineEditPanel'
+import { usePendingEditStore } from '../lib/stores/pendingEditStore'
 import { MCPPanel } from '../components/agent/MCPPanel'
 import { SkillBrowser } from '../components/agent/SkillBrowser'
 import { SessionHistory } from '../components/agent/SessionHistory'
 import { ResizeHandle } from '../components/agent/ResizeHandle'
 import { useResizablePanel } from '../hooks/useResizablePanel'
+import { useProactiveAgent } from '../hooks/useProactiveAgent'
 import type { ChatSession } from '../lib/sessionStore'
 import { DownloadDesktopBanner } from '../components/agent/DownloadDesktopBanner'
 import { useStore } from '../store/useStore'
@@ -60,6 +63,14 @@ export function AgentPage() {
   const [diffView, setDiffView] = useState<DiffResult | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   const [activeSkills, setActiveSkills] = useState<string[]>([])
+  // Inline Edit 流式 UI：AI 调用 inline_edit 时弹出 diff 确认面板
+  const pendingEdit = usePendingEditStore((s) => s.current)
+
+  // V3 维度9: 主动性 Agent——文件保存后自动检查诊断 + 后台 AI 分析
+  const proactiveAgent = useProactiveAgent({
+    workspacePath: workspace?.path,
+    enabled: true,
+  })
 
   // === 可拖拽 + 可折叠面板系统（参考 Trae IDE / VS Code）===
   // 左侧栏（文件资源管理器等）：横向拖拽调整宽度，再次点击活动栏图标可折叠
@@ -176,13 +187,15 @@ export function AgentPage() {
             const fs = await getFS()
             await fs.writeFile(activeFile.path, editorContent)
             setDirtyFiles(prev => { const n = new Set(prev); n.delete(activeFile.path); return n })
+            // V3 维度9: 保存后主动检查诊断 + AI 分析
+            proactiveAgent.notifyFileSaved(activeFile.path, editorContent)
           } catch (e) { console.error('保存失败', e) }
         }
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [workspace, activeFile, editorContent])
+  }, [workspace, activeFile, editorContent, proactiveAgent])
 
   // === 工作区操作 ===
   const handleWorkspaceOpen = useCallback(async (meta: WorkspaceMeta) => {
@@ -487,7 +500,9 @@ export function AgentPage() {
 
         {/* 中栏：编辑器 + 底部面板（flex-1 自适应剩余空间） */}
         <main className="flex-1 min-w-0 bg-bg-card/60 border border-border-subtle rounded-lg overflow-hidden flex flex-col">
-          {diffView ? (
+          {pendingEdit ? (
+            <InlineEditPanel />
+          ) : diffView ? (
             <DiffView diff={diffView} onClose={() => setDiffView(null)} />
           ) : showPreview ? (
             <PreviewPanel onClose={() => setShowPreview(false)} />
@@ -573,6 +588,34 @@ export function AgentPage() {
             className="flex-shrink-0 bg-bg-card/60 border border-border-subtle rounded-lg overflow-hidden flex flex-col"
             style={{ width: rightPanel.size }}
           >
+            {/* V3 维度9: 主动性提示——文件保存后自动检查的诊断/AI 分析结果 */}
+            {proactiveAgent.suggestions.length > 0 && (
+              <div className="flex-shrink-0 border-b border-border-subtle bg-bg-deep/60 max-h-32 overflow-y-auto">
+                {proactiveAgent.suggestions.map(s => (
+                  <div key={s.id} className="flex items-start gap-1.5 px-2 py-1 text-[10px] border-b border-border-subtle/50 last:border-b-0">
+                    {s.type === 'error' && <AlertCircle className="w-3 h-3 text-red-400 flex-shrink-0 mt-0.5" />}
+                    {s.type === 'warning' && <TriangleAlert className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />}
+                    {s.type === 'optimization' && <Sparkles className="w-3 h-3 text-accent-emerald flex-shrink-0 mt-0.5" />}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className="text-zinc-400 truncate">{s.fileName}</span>
+                        <span className={s.type === 'error' ? 'text-red-400' : s.type === 'warning' ? 'text-amber-400' : 'text-accent-emerald'}>
+                          {s.message.slice(0, 100)}
+                        </span>
+                      </div>
+                      {s.detail && <div className="text-zinc-600 whitespace-pre-wrap mt-0.5">{s.detail}</div>}
+                    </div>
+                    <button
+                      onClick={() => proactiveAgent.dismissSuggestion(s.id)}
+                      title="忽略"
+                      className="text-zinc-600 hover:text-zinc-300 flex-shrink-0"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             {/* AI 对话区（flex-1 自适应） */}
             <div className="flex-1 min-h-0 border-b border-border-subtle">
               <AIChatPanel

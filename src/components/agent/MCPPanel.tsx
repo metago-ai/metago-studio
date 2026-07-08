@@ -1,15 +1,22 @@
 import { useState, useEffect } from 'react'
-import { Wrench, ChevronDown, ChevronRight, Activity, Trash2, FileCode, GitBranch, BrainCircuit } from 'lucide-react'
+import { Wrench, ChevronDown, ChevronRight, Activity, Trash2, FileCode, GitBranch, BrainCircuit, Terminal, ListTodo, Rocket, Users, FileEdit, Sparkles, Search } from 'lucide-react'
 import { AGENT_TOOLS, type AgentToolMeta } from '../../lib/agent/systemPrompt'
-import { getMCPLogStore, type MCPLogEntry } from '../../lib/mcpRegistry'
+import { MCP_TOOLS, getMCPLogStore, type MCPLogEntry } from '../../lib/mcpRegistry'
 
 const CATEGORY_ICON: Record<string, typeof FileCode> = {
   '文件系统': FileCode,
   'Git': GitBranch,
+  'Shell': Terminal,
+  '任务管理': ListTodo,
+  '部署验证': Rocket,
+  '子代理': Users,
+  '流式编辑': FileEdit,
+  '自省': Sparkles,
+  '代码智能': Search,
   'MCP 智能工具': BrainCircuit,
 }
 
-const CATEGORY_ORDER = ['文件系统', 'Git', 'MCP 智能工具']
+const CATEGORY_ORDER = ['文件系统', 'Git', 'Shell', '任务管理', '部署验证', '子代理', '流式编辑', '自省', '代码智能', 'MCP 智能工具']
 
 /** 按分类分组 */
 function groupByCategory(tools: AgentToolMeta[]): Record<string, AgentToolMeta[]> {
@@ -22,11 +29,14 @@ function groupByCategory(tools: AgentToolMeta[]): Record<string, AgentToolMeta[]
 /**
  * MCP/工具面板
  *
- * 展示 AI 可真实调用的工具（文件系统 + Git + 39 个 MCP 智能工具）
+ * V3: 工具数从代码动态派生（不硬编码），新增工具自动反映。
+ * 分类涵盖：文件系统 / Git / Shell / 任务管理 / 部署验证 / 子代理 / 流式编辑 / 自省 / 代码智能 / MCP 智能工具
  * + 实时调用日志（AI 对话时自动调用，用户无需手动操作）
  *
  * 所有工具都通过 OpenAI function call 协议被 AI 主动调用：
- * - 文件系统/Git 工具 → 直接执行文件/版本操作
+ * - 文件系统/Git/Shell 工具 → 直接执行文件/版本/命令操作
+ * - 任务管理/部署验证/子代理/流式编辑 → 工程协作能力
+ * - 自省/代码智能 → AI 自我感知 + 语义代码搜索
  * - MCP 智能工具 → 返回思维协议，AI 在下一轮推理中应用
  */
 export function MCPPanel() {
@@ -36,6 +46,10 @@ export function MCPPanel() {
   const [filter, setFilter] = useState('')
 
   const grouped = groupByCategory(AGENT_TOOLS)
+  // V3: 动态统计（不硬编码）
+  const engineeringTotal = AGENT_TOOLS.length
+  const mcpTotal = MCP_TOOLS.length
+  const grandTotal = engineeringTotal + mcpTotal
 
   useEffect(() => {
     const store = getMCPLogStore()
@@ -61,8 +75,8 @@ export function MCPPanel() {
 
   const filteredGrouped = filter ? groupByCategory(filteredTools) : grouped
 
-  // 所有工具都可调用（修复：MCP 智能工具也是真实可调用的 function call 工具）
-  const callableCount = AGENT_TOOLS.length
+  // 所有工具都可调用（工程工具 + MCP 智能工具都是真实可调用的 function call 工具）
+  const callableCount = grandTotal
 
   return (
     <div className="h-full flex flex-col">
@@ -158,7 +172,16 @@ export function MCPPanel() {
                   {expandedCats.has(cat) || filter
                     ? <ChevronDown className="w-3 h-3 text-zinc-500" />
                     : <ChevronRight className="w-3 h-3 text-zinc-500" />}
-                  <Icon className={`w-3 h-3 ${cat === '文件系统' ? 'text-accent-blue' : cat === 'Git' ? 'text-accent-amber' : 'text-accent-violet'}`} />
+                  <Icon className={`w-3 h-3 ${
+                    cat === '文件系统' ? 'text-accent-blue'
+                    : cat === 'Git' ? 'text-accent-amber'
+                    : cat === 'Shell' ? 'text-zinc-400'
+                    : cat === '任务管理' ? 'text-accent-emerald'
+                    : cat === '部署验证' ? 'text-accent-rose'
+                    : cat === '子代理' ? 'text-accent-cyan'
+                    : cat === '流式编辑' ? 'text-accent-violet'
+                    : 'text-accent-violet'
+                  }`} />
                   <span className="text-[10px] font-medium text-zinc-400">{cat}</span>
                   <span className="text-[9px] text-zinc-600">({tools.length})</span>
                 </button>

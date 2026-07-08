@@ -61,12 +61,20 @@ export function initAutoUpdater(window: BrowserWindow): void {
       total: progress.total,
       bytesPerSecond: progress.bytesPerSecond,
     })
+    // 任务栏进度条（Windows/macOS 任务栏显示下载进度）
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setProgressBar(progress.percent / 100)
+    }
   })
 
   // 下载完成
   autoUpdater.on('update-downloaded', (info) => {
     log.info('[updater] 更新下载完成:', info.version)
     sendStatus('downloaded', { version: info.version })
+    // 重置任务栏进度条
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setProgressBar(-1)
+    }
 
     // 询问用户是否立即安装
     dialog.showMessageBox(window, {
@@ -83,10 +91,19 @@ export function initAutoUpdater(window: BrowserWindow): void {
     })
   })
 
-  // 错误
+  // 错误（弹窗通知用户，避免"点击更新后无反应"）
   autoUpdater.on('error', (err) => {
     log.error('[updater] 更新错误:', err)
     sendStatus('error', { message: err.message })
+    // 重置任务栏进度条
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setProgressBar(-1)
+    }
+    // 弹窗通知用户（关键修复：之前只记日志，用户看不到错误）
+    dialog.showErrorBox(
+      '更新失败',
+      `更新过程中发生错误：\n\n${err.message}\n\n请检查网络连接后重试，或访问 https://metago.life/download 手动下载。`
+    )
   })
 
   // IPC handlers

@@ -133,11 +133,18 @@ exports.main = async (event) => {
 
   const { action } = event
 
-  // 获取用户身份（兼容 Web SDK、小程序、HTTP 触发）
+  // V3 身份标识（2026-07-07 修复严重 bug）：
+  // _clientUid（手机号注册的稳定 userId）优先，wxContext.UID（匿名 UID）仅作 fallback
   const wxContext = cloud.getWXContext()
-  const openid = wxContext.OPENID || wxContext.UID || wxContext.APPID
-    || event.userInfo?.openid || event.userInfo?.openId || event.userInfo?.uid
-    || event.openid || event.uid || event._clientUid
+  const openid = event._clientUid
+    || event.uid
+    || event.openid
+    || event.userInfo?.uid
+    || event.userInfo?.openId
+    || event.userInfo?.openid
+    || wxContext.OPENID
+    || wxContext.UID
+    || wxContext.APPID
 
   if (!openid) return { code: 401, message: '未登录，无法获取用户身份', debug: { wxContextKeys: Object.keys(wxContext || {}) } }
 
@@ -153,8 +160,24 @@ exports.main = async (event) => {
   switch (action) {
     // ========== 查询用户订阅状态（服务端权威） ==========
     case 'getProfile': {
-      const res = await db.collection('user_profiles').where({ openid }).get()
-      const profile = res.data?.[0]
+      let res = await db.collection('user_profiles').where({ openid }).get()
+      let profile = res.data?.[0]
+
+      // V4.5 修复（2026-07-08）：openid 不匹配时的 licenseKey fallback + 自动迁移
+      // 场景：用户激活授权码时用的是 CloudBase 匿名 UID，后来登录了 userManager，
+      //       metago_user_id 变成了新值，但 user_profiles 中的 openid 还是旧匿名 UID。
+      // 解决：用 licenseKey 查找 Pro 记录，自动将 openid 迁移到当前用户。
+      if (!profile && event.licenseKey) {
+        const licenseRes = await db.collection('user_profiles').where({ licenseKey: event.licenseKey }).get()
+        const licenseProfile = licenseRes.data?.[0]
+        if (licenseProfile && licenseProfile.tier && licenseProfile.tier !== 'free') {
+          await db.collection('user_profiles').where({ licenseKey: event.licenseKey }).update({
+            data: { openid, updatedAt: now }
+          })
+          res = await db.collection('user_profiles').where({ openid }).get()
+          profile = res.data?.[0]
+        }
+      }
 
       if (!profile) {
         return { code: 0, data: buildProfile(null) }
@@ -276,9 +299,11 @@ exports.main = async (event) => {
         await db.collection('user_profiles').where({ openid }).update({ data: profileData })
       } else {
         await db.collection('user_profiles').add({
-          openid,
-          ...profileData,
-          createdAt: now,
+          data: {
+            openid,
+            ...profileData,
+            createdAt: now,
+          }
         })
       }
 
@@ -295,16 +320,21 @@ exports.main = async (event) => {
 
       // 记录订单
       await db.collection('orders').add({
-        orderId: `license_${Date.now()}_${openid.slice(-8)}`,
-        openid,
-        plan: licenseTier,
-        orderType: 'subscription',
-        amount: license.amount || 0,
-        status: 'completed',
-        licenseKey,
-        email: email || '',
-        contact: contact || '',
-        createdAt: now,
+        data: {
+          orderId: `license_${Date.now()}_${openid.slice(-8)}`,
+          openid,
+          userId: openid,
+          plan: licenseTier,
+          planId: `license_${licenseTier}`,
+          tier: licenseTier,
+          orderType: 'subscription',
+          amount: license.amount || 0,
+          status: 'completed',
+          licenseKey,
+          email: email || '',
+          contact: contact || '',
+          createdAt: now,
+        }
       })
 
       const fullProfile = { ...profile, ...profileData }
@@ -365,17 +395,19 @@ exports.main = async (event) => {
         const expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000)
         const defaults = TIER_DEFAULTS[tier]
         await db.collection('licenses').add({
-          licenseKey: key,
-          plan: tier,
-          durationDays,
-          expiresAt,
-          status: 'unused',
-          note,
-          seats: defaults.seats,
-          teamHoursBalance: defaults.teamHoursBalance,
-          enterpriseSeats: defaults.enterpriseSeats,
-          createdBy: openid,
-          createdAt: now,
+          data: {
+            licenseKey: key,
+            plan: tier,
+            durationDays,
+            expiresAt,
+            status: 'unused',
+            note,
+            seats: defaults.seats,
+            teamHoursBalance: defaults.teamHoursBalance,
+            enterpriseSeats: defaults.enterpriseSeats,
+            createdBy: openid,
+            createdAt: now,
+          }
         })
         licenses.push({ key, expiresAt: expiresAt.toISOString(), plan: tier })
       }

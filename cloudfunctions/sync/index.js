@@ -12,9 +12,15 @@ exports.main = async (event) => {
   // 获取用户身份（兼容 Web SDK、小程序、HTTP 触发）
   // Web SDK 端 OPENID 可能为空，身份在 UID 字段；前端 callFunction 注入 _clientUid 作为终极 fallback
   const wxContext = cloud.getWXContext()
-  const openid = wxContext.OPENID || wxContext.UID || wxContext.APPID
-    || event.userInfo?.openid || event.userInfo?.openId || event.userInfo?.uid
-    || event.openid || event.uid || event._clientUid
+  const openid = event._clientUid
+    || event.uid
+    || event.openid
+    || event.userInfo?.uid
+    || event.userInfo?.openId
+    || event.userInfo?.openid
+    || wxContext.OPENID
+    || wxContext.UID
+    || wxContext.APPID
 
   if (!openid) return { code: 401, message: '未登录', debug: { wxContextKeys: Object.keys(wxContext || {}) } }
 

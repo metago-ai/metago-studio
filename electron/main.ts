@@ -11,6 +11,7 @@ import * as path from 'path'
 import { registerFSHandlers } from './ipc/fs'
 import { registerTerminalHandlers } from './ipc/terminal'
 import { registerGitHandlers } from './ipc/git'
+import { registerShellExecHandlers } from './ipc/shellExec'
 import { buildAppMenu } from './menu'
 import { initAutoUpdater } from './updater'
 import { cleanupTerminals } from './ipc/terminal'
@@ -122,8 +123,9 @@ app.on('window-all-closed', () => {
 // 注册 IPC handlers（在 app ready 后）
 app.whenReady().then(() => {
   registerFSHandlers()
-  registerTerminalHandlers()
-  registerGitHandlers()
+    registerTerminalHandlers()
+    registerGitHandlers()
+    registerShellExecHandlers()
 })
 
 // 退出前清理所有终端子进程，避免进程泄漏

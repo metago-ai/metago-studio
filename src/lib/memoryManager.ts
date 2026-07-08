@@ -41,12 +41,35 @@ export interface LongTermFact {
   source: 'user-stated' | 'ai-inferred' | 'project-detected'
 }
 
+/** V3: 决策记忆（跨会话保留用户的方案选择） */
+export interface DecisionMemory {
+  id: string
+  topic: string           // 决策主题（如"状态管理方案"）
+  chosenOption: string    // 用户选的方案
+  reason?: string         // 选择原因
+  rejectedOptions?: string[] // 被拒绝的方案
+  timestamp: number
+  workspacePath?: string  // 项目级隔离
+}
+
+/** V3: 学习记忆（AI 从对话中学到的项目特定知识） */
+export interface LearningMemory {
+  id: string
+  pattern: string         // 学到的模式（如"此项目用函数式组件"）
+  evidence: string        // 证据（用户说的原话或代码示例）
+  confidence: number      // 0-1
+  timestamp: number
+  workspacePath?: string
+}
+
 // ============ 常量 ============
 
 const MAX_SHORT_TERM_MESSAGES = 50
 const MAX_RECENT_FILES = 10
 const TOKEN_COMPRESS_THRESHOLD = 80000  // 200K 上下文的 40%
 const LONG_TERM_KEY = 'metago_long_term_facts_v1'
+const DECISIONS_KEY = 'metago_decision_memories_v1'
+const LEARNINGS_KEY = 'metago_learning_memories_v1'
 
 // ============ 记忆管理器 ============
 
@@ -59,9 +82,13 @@ export class MemoryManager {
 
   // 层 3：长期
   private facts: LongTermFact[] = []
+  private decisions: DecisionMemory[] = []
+  private learnings: LearningMemory[] = []
 
   constructor() {
     this.facts = this.loadLongTermFacts()
+    this.decisions = this.loadDecisions()
+    this.learnings = this.loadLearnings()
   }
 
   // ============ 层 1：短期记忆 ============
@@ -212,6 +239,101 @@ export class MemoryManager {
   private saveLongTermFacts(): void {
     try {
       localStorage.setItem(LONG_TERM_KEY, JSON.stringify(this.facts.slice(-100)))
+    } catch { /* 忽略 */ }
+  }
+
+  // ============ V3: 决策记忆 ============
+
+  /** 记录一个决策（用户选了什么方案） */
+  recordDecision(decision: Omit<DecisionMemory, 'id' | 'timestamp'>): void {
+    const full: DecisionMemory = {
+      ...decision,
+      id: `dec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: Date.now(),
+    }
+    // 同主题的旧决策移到末尾（保留历史，但新的优先）
+    this.decisions = this.decisions.filter(d => !(d.topic === decision.topic && d.workspacePath === decision.workspacePath))
+    this.decisions.push(full)
+    this.saveDecisions()
+  }
+
+  /** 查询与当前主题相关的历史决策 */
+  relevantDecisions(userMessage: string, workspacePath?: string): DecisionMemory[] {
+    if (this.decisions.length === 0) return []
+    const lower = userMessage.toLowerCase()
+    return this.decisions.filter(d => {
+      if (workspacePath && d.workspacePath && d.workspacePath !== workspacePath) return false
+      return lower.includes(d.topic.toLowerCase()) ||
+             d.topic.toLowerCase().includes(lower.slice(0, 10))
+    }).slice(-5) // 最近 5 个相关决策
+  }
+
+  /** 获取所有决策（决策历史页面用） */
+  getAllDecisions(): DecisionMemory[] {
+    return [...this.decisions]
+  }
+
+  private loadDecisions(): DecisionMemory[] {
+    try {
+      const raw = localStorage.getItem(DECISIONS_KEY)
+      if (!raw) return []
+      return JSON.parse(raw)
+    } catch {
+      return []
+    }
+  }
+
+  private saveDecisions(): void {
+    try {
+      localStorage.setItem(DECISIONS_KEY, JSON.stringify(this.decisions.slice(-50)))
+    } catch { /* 忽略 */ }
+  }
+
+  // ============ V3: 学习记忆 ============
+
+  /** 记录学到的模式（AI 从对话中推断的项目特定知识） */
+  recordLearning(learning: Omit<LearningMemory, 'id' | 'timestamp'>): void {
+    // 同 pattern 的旧学习记忆更新
+    const existing = this.learnings.findIndex(l =>
+      l.pattern === learning.pattern &&
+      l.workspacePath === learning.workspacePath
+    )
+    const full: LearningMemory = {
+      ...learning,
+      id: `learn-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: Date.now(),
+    }
+    if (existing >= 0) {
+      this.learnings[existing] = full
+    } else {
+      this.learnings.push(full)
+    }
+    this.saveLearnings()
+  }
+
+  /** 查询与当前主题相关的学习记忆 */
+  relevantLearnings(userMessage: string, workspacePath?: string): LearningMemory[] {
+    if (this.learnings.length === 0) return []
+    const lower = userMessage.toLowerCase()
+    return this.learnings.filter(l => {
+      if (workspacePath && l.workspacePath && l.workspacePath !== workspacePath) return false
+      return lower.includes(l.pattern.toLowerCase().slice(0, 10))
+    }).slice(-5)
+  }
+
+  private loadLearnings(): LearningMemory[] {
+    try {
+      const raw = localStorage.getItem(LEARNINGS_KEY)
+      if (!raw) return []
+      return JSON.parse(raw)
+    } catch {
+      return []
+    }
+  }
+
+  private saveLearnings(): void {
+    try {
+      localStorage.setItem(LEARNINGS_KEY, JSON.stringify(this.learnings.slice(-100)))
     } catch { /* 忽略 */ }
   }
 

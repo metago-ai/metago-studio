@@ -41,6 +41,7 @@ const SkillsPage = lazy(() => import('./pages/SkillsPage').then(m => ({ default:
 const AgentPage = lazy(() => import('./pages/Agent').then(m => ({ default: m.AgentPage })))
 const DecisionLockPage = lazy(() => import('./pages/DecisionLockPage').then(m => ({ default: m.DecisionLockPage })))
 const EvolutionPage = lazy(() => import('./pages/EvolutionPage').then(m => ({ default: m.EvolutionPage })))
+const ShieldPage = lazy(() => import('./pages/ShieldPage').then(m => ({ default: m.ShieldPage })))
 const MetricsPage = lazy(() => import('./pages/MetricsPage').then(m => ({ default: m.MetricsPage })))
 const TemplatesPage = lazy(() => import('./pages/TemplatesPage').then(m => ({ default: m.TemplatesPage })))
 const KitPage = lazy(() => import('./pages/KitPage').then(m => ({ default: m.KitPage })))
@@ -56,6 +57,8 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ defaul
 const RolesPage = lazy(() => import('./pages/RolesPage').then(m => ({ default: m.RolesPage })))
 const BehaviorBankPage = lazy(() => import('./pages/BehaviorBankPage').then(m => ({ default: m.BehaviorBankPage })))
 const CertifyPage = lazy(() => import('./pages/CertifyPage').then(m => ({ default: m.CertifyPage })))
+const DepthAnalysisPage = lazy(() => import('./pages/DepthAnalysisPage').then(m => ({ default: m.DepthAnalysisPage })))
+const FdePage = lazy(() => import('./pages/FdePage').then(m => ({ default: m.FdePage })))
 
 function PageLoading() {
   return (
@@ -91,6 +94,7 @@ export default function App() {
                     <Route path="/skills" element={<SkillsPage />} />
                     <Route path="/decision-lock" element={<DecisionLockPage />} />
                     <Route path="/evolution" element={<EvolutionPage />} />
+                    <Route path="/shield" element={<ShieldPage />} />
                     <Route path="/metrics" element={<RequireAuth><MetricsPage /></RequireAuth>} />
                     <Route path="/templates" element={<TemplatesPage />} />
                     <Route path="/kit" element={<KitPage />} />
@@ -106,6 +110,8 @@ export default function App() {
                     <Route path="/roles" element={<RolesPage />} />
                     <Route path="/behavior-bank" element={<BehaviorBankPage />} />
                     <Route path="/certify" element={<CertifyPage />} />
+                    <Route path="/depth-analysis" element={<DepthAnalysisPage />} />
+                    <Route path="/fde" element={<FdePage />} />
                   </Routes>
                 </Suspense>
               </main>

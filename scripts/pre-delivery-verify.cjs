@@ -85,6 +85,26 @@ function httpHead(url) {
   })
 }
 
+/** HTTP GET 请求（返回完整内容，用于页面内容验证） */
+function httpGet(url) {
+  return new Promise((resolve) => {
+    const req = https.request(url, { method: 'GET', timeout: 15000 }, (res) => {
+      let chunks = ''
+      res.on('data', (c) => { chunks += c })
+      res.on('end', () => {
+        resolve({
+          statusCode: res.statusCode,
+          headers: res.headers,
+          content: chunks,
+        })
+      })
+    })
+    req.on('error', (e) => resolve({ error: e.message }))
+    req.on('timeout', () => { req.destroy(); resolve({ error: 'timeout' }) })
+    req.end()
+  })
+}
+
 /** HTTP POST 请求（JSON body） */
 function httpPost(url, body) {
   return new Promise((resolve) => {
@@ -210,13 +230,73 @@ async function checkV13_ArtifactScan() {
   return passed
 }
 
-/** V2.1 Web 端可达性 */
+/** V2.1 Web 端可达性（增强版：HTTP 状态 + title + main chunk + HTML 结构）
+ *
+ * 历史教训（2026-07-06 事故）：
+ *   旧版只检查 HTTP 200，但页面白屏（chunk 500 + 根路径被错误覆盖）。
+ *   增强版检查：
+ *     V2.1a Studio index.html HTTP 200 + title 含 "MetaGO Studio"
+ *     V2.1b 根路径 index.html HTTP 200 + title 含 "MetaGO Lifeform Kit"（防止 Studio 覆盖官网）
+ *     V2.1c Studio main chunk 可加载（HTTP 200 + Content-Type: application/javascript）
+ *     V2.1d HTML 结构完整（含 <div id="root">）
+ */
 async function checkV21_WebReachable() {
-  const res = await httpHead(STUDIO_URL)
-  const passed = res.statusCode === 200
-  record('V2.1', 'Web 端可达', passed,
-    `HTTP ${res.statusCode || 'ERROR'} ${res.error || ''}`)
-  return passed
+  let allPassed = true
+
+  // V2.1a Studio 页面内容验证
+  const studioRes = await httpGet(STUDIO_URL)
+  const studioStatusOk = studioRes.statusCode === 200
+  const studioTitleMatch = studioRes.content?.match(/<title>(.*?)<\/title>/) || []
+  const studioTitle = studioTitleMatch[1] || ''
+  const studioTitleOk = studioStatusOk && studioTitle.includes('MetaGO Studio')
+  const studioHtmlOk = studioStatusOk && /<div\s+id="root"/.test(studioRes.content || '')
+  record('V2.1a', 'Studio 页面内容（title + root div）', studioTitleOk && studioHtmlOk,
+    `HTTP ${studioRes.statusCode || 'ERROR'}, title="${studioTitle.slice(0, 60)}", root=${studioHtmlOk ? 'YES' : 'NO'} ${studioRes.error || ''}`)
+  if (!(studioTitleOk && studioHtmlOk)) allPassed = false
+
+  // V2.1b 根路径官网验证（防止 Studio 错误覆盖官网）
+  const rootRes = await httpGet(OFFICIAL_URL + '/')
+  const rootStatusOk = rootRes.statusCode === 200
+  const rootTitleMatch = rootRes.content?.match(/<title>(.*?)<\/title>/) || []
+  const rootTitle = rootTitleMatch[1] || ''
+  const rootTitleOk = rootStatusOk && rootTitle.includes('MetaGO Lifeform Kit')
+  record('V2.1b', '根路径官网 title（防 Studio 覆盖）', rootTitleOk,
+    `HTTP ${rootRes.statusCode || 'ERROR'}, title="${rootTitle.slice(0, 60)}" ${rootRes.error || ''}`)
+  if (!rootTitleOk) allPassed = false
+
+  // V2.1c Studio main chunk 可加载（白屏根因检查）
+  // 从 Studio index.html 解析 main chunk URL: <script ... src="/studio/assets/index-XXXX.js">
+  const mainChunkMatch = studioRes.content?.match(/src="(\/studio\/assets\/index-[^"]+\.js)"/)
+  if (mainChunkMatch) {
+    const chunkUrl = OFFICIAL_URL + mainChunkMatch[1]
+    const chunkRes = await httpHead(chunkUrl)
+    const chunkStatusOk = chunkRes.statusCode === 200
+    const chunkType = chunkRes.headers?.['content-type'] || ''
+    const chunkTypeOk = /javascript/.test(chunkType)
+    record('V2.1c', 'Studio main chunk 可加载', chunkStatusOk && chunkTypeOk,
+      `HTTP ${chunkRes.statusCode || 'ERROR'}, type="${chunkType}", url=${mainChunkMatch[1]} ${chunkRes.error || ''}`)
+    if (!(chunkStatusOk && chunkTypeOk)) allPassed = false
+  } else {
+    record('V2.1c', 'Studio main chunk 可加载', false,
+      '无法从 index.html 解析 main chunk URL（构建产物异常）')
+    allPassed = false
+  }
+
+  // V2.1d Studio CSS 可加载
+  const cssMatch = studioRes.content?.match(/href="(\/studio\/assets\/index-[^"]+\.css)"/)
+  if (cssMatch) {
+    const cssUrl = OFFICIAL_URL + cssMatch[1]
+    const cssRes = await httpHead(cssUrl)
+    const cssOk = cssRes.statusCode === 200
+    record('V2.1d', 'Studio CSS 可加载', cssOk,
+      `HTTP ${cssRes.statusCode || 'ERROR'}, url=${cssMatch[1]} ${cssRes.error || ''}`)
+    if (!cssOk) allPassed = false
+  } else {
+    record('V2.1d', 'Studio CSS 可加载', false, '无法从 index.html 解析 CSS URL')
+    allPassed = false
+  }
+
+  return allPassed
 }
 
 /** V2.2 + V2.3 云函数 aiProxy 可调用 + AI 对话端到端 */

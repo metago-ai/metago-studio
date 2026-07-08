@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Loader2, CheckCircle2, XCircle, Circle, ChevronRight, Zap, Trash2 } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, Circle, ChevronRight, Zap, Trash2, ListTodo } from 'lucide-react'
+import { useTaskStore } from '../../lib/stores/taskStore'
 
 // 内联类型定义（原 agentLoop.ts 已删除，这里是唯一使用方）
 export type StepStatus = 'pending' | 'running' | 'completed' | 'failed'
@@ -26,6 +27,8 @@ interface TodoPanelProps {
 
 /** Agent 执行步骤可视化面板 */
 export function TodoPanel({ steps, running, onAbort, onClear }: TodoPanelProps) {
+  const tasks = useTaskStore((s) => s.tasks)
+
   return (
     <div className="h-full flex flex-col">
       {/* 头部 */}
@@ -60,6 +63,34 @@ export function TodoPanel({ steps, running, onAbort, onClear }: TodoPanelProps) 
           )}
         </div>
       </div>
+
+      {/* AI 任务列表（来自 taskStore，task_create 工具创建） */}
+      {tasks.length > 0 && (
+        <div className="flex-shrink-0 border-b border-border-subtle bg-bg-deep/30 px-3 py-2">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <ListTodo className="w-3 h-3 text-accent-blue" />
+            <span className="text-[10px] font-medium text-zinc-400">
+              任务列表（{tasks.filter(t => t.status === 'completed').length}/{tasks.length}）
+            </span>
+          </div>
+          <div className="space-y-1 max-h-32 overflow-y-auto">
+            {tasks.map((task) => (
+              <div key={task.id} className="flex items-center gap-1.5 text-[10px]">
+                {task.status === 'completed' ? (
+                  <CheckCircle2 className="w-2.5 h-2.5 text-accent-emerald flex-shrink-0" />
+                ) : task.status === 'in_progress' ? (
+                  <Loader2 className="w-2.5 h-2.5 text-accent-blue animate-spin flex-shrink-0" />
+                ) : (
+                  <Circle className="w-2.5 h-2.5 text-zinc-600 flex-shrink-0" />
+                )}
+                <span className={`flex-1 truncate ${task.status === 'completed' ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
+                  {task.subject}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 步骤列表 */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">

@@ -18,6 +18,11 @@ export type SkillTag =
   | '验证'
   | '质量'
   | '自律'
+  | '意识'
+  | '方法论'
+  | '组织'
+  | '记忆'
+  | '共识'
 
 /** 单个技能的元信息 */
 export interface Skill {
@@ -244,6 +249,17 @@ export interface ChatMessage {
   error?: string
   /** 使用的模型 ID */
   modelId?: string
+  /** V3 对标 Trae 回退版本：发送此消息前的工作区快照（git stash ref）
+   *  仅桌面端 + 已打开工作区 + 工作区是 git 仓库时填充
+   *  用户点击"回退到此对话前"按钮时，执行 git stash apply 恢复
+   */
+  workspaceSnapshot?: {
+    stashRef: string
+    branch: string
+    timestamp: string
+    /** 改动文件数（用于 UI 显示） */
+    changedFiles: number
+  }
 }
 
 /** 联网搜索结果 */

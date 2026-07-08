@@ -74,6 +74,7 @@ export function ReviewBoard({
         <div className="flex items-center gap-1.5">
           <Shield className={`w-3.5 h-3.5 ${decisionLockPassed === false ? 'text-red-400' : 'text-accent-emerald'}`} />
           <span className="text-xs font-medium text-zinc-300">决策锁审查看板</span>
+          <span title="只在点击「代码审查」或「安全审计」按钮时激活。AI 审查代码后在下方列出 Critical/Major/Minor/Info 四级问题，可点击跳转到代码位置。" className="text-[10px] text-zinc-600 cursor-help border border-zinc-700 rounded-full w-3.5 h-3.5 flex items-center justify-center">?</span>
           {totalIssues > 0 && (
             <span className="text-[10px] text-zinc-500 px-1.5 py-0.5 rounded bg-bg-deep border border-border-subtle">
               {totalIssues} 项问题
@@ -96,9 +97,10 @@ export function ReviewBoard({
 
           {/* 空状态 */}
           {!session && (
-            <div className="text-center py-6 text-[11px] text-zinc-600">
+            <div className="text-center py-6 text-[11px] text-zinc-600 px-2">
               <Shield className="w-6 h-6 mx-auto mb-2 opacity-30" />
-              审查后此处展示结构化结果
+              <p className="mb-1">点击上方工具栏 <span className="text-accent-emerald">代码审查</span> 或 <span className="text-accent-emerald">安全审计</span> 按钮，AI 会审查选中代码并在下方显示结构化问题列表。</p>
+              <p className="text-[10px] text-zinc-700 mt-2">问题按 Critical / Major / Minor / Info 四级分级，可点击定位到代码位置。</p>
             </div>
           )}
 

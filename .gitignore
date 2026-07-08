@@ -54,3 +54,13 @@ asar-extract-test/
 asar-verify/
 verify-report.json
 --output
+
+# Temp/debug outputs
+_*.json
+scripts/_*.json
+scripts/invoke-params.json
+scripts/verify-events-body.json
+verify-ai.html
+screenshots/
+
+# Keep latest.yml for electron-updater

@@ -73,7 +73,7 @@ export const PRICING_PLANS: Record<PlanTier, PricingPlan> = {
       '8 公理 + 7 属性 + 43 条根本属性',
       '39 个 metago-* 技能',
       '7 平台适配器',
-      'MCP Server（39 tools）',
+      'MCP Server（53 tools）',
       '决策锁软校验（提示词驱动）',
       'AI 对话 10万 tokens/天（DeepSeek V4 Flash）',
     ],

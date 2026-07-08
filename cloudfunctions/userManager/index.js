@@ -141,7 +141,29 @@ async function handleRegister(event) {
     createdAt: now,
     updatedAt: now,
   }
-  const res = await db.collection('users').add(userDoc)
+  const res = await db.collection('users').add({ data: userDoc })
+
+  try {
+    try { await db.createCollection('user_profiles') } catch { /* 已存在 */ }
+    const profileExist = await db.collection('user_profiles').where({ openid: res.id }).count()
+    if (profileExist.total === 0) {
+      await db.collection('user_profiles').add({
+        data: {
+          openid: res.id,
+          phone,
+          displayName: nickname || `用户${phone.slice(-4)}`,
+          tier: 'free',
+          loginType: 'PHONE',
+          createdAt: now,
+          updatedAt: now,
+          lastActiveAt: now,
+        }
+      })
+    }
+  } catch (e) {
+    console.warn('[userManager] user_profiles 同步写入失败', e?.message || e)
+  }
+
   const token = signToken({ userId: res.id, phone })
   return { code: 0, data: { token, user: publicUser({ _id: res.id, ...userDoc }) } }
 }
@@ -158,7 +180,7 @@ async function handleLogin(event) {
   }
   // 检查订阅是否过期
   if (user.plan !== 'free' && user.planExpiresAt && new Date(user.planExpiresAt) <= new Date()) {
-    await db.collection('users').doc(user._id).update({ plan: 'free', planExpiresAt: null, updatedAt: new Date() })
+    await db.collection('users').doc(user._id).update({ data: { plan: 'free', planExpiresAt: null, updatedAt: new Date() } })
     user.plan = 'free'
     user.planExpiresAt = null
   }
@@ -175,7 +197,7 @@ async function handleGetProfile(event) {
   const user = data[0]
   // 检查订阅是否过期
   if (user.plan !== 'free' && user.planExpiresAt && new Date(user.planExpiresAt) <= new Date()) {
-    await db.collection('users').doc(user._id).update({ plan: 'free', planExpiresAt: null, updatedAt: new Date() })
+    await db.collection('users').doc(user._id).update({ data: { plan: 'free', planExpiresAt: null, updatedAt: new Date() } })
     user.plan = 'free'
     user.planExpiresAt = null
   }
@@ -225,10 +247,12 @@ async function handleRecordUsage(event) {
   }
 
   await db.collection('usage_logs').add({
-    userId: payload.userId,
-    date,
-    modelId: event.modelId || 'unknown',
-    timestamp: new Date(),
+    data: {
+      userId: payload.userId,
+      date,
+      modelId: event.modelId || 'unknown',
+      timestamp: new Date(),
+    }
   })
 
   return { code: 0, data: { success: true } }

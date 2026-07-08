@@ -1,0 +1,8 @@
+version: 1.1.9
+files:
+  - url: MetaGO-Agent-1.1.9-win-x64.exe
+    sha512: 3bff2e9e602b776263607e6d70a467a248fbfae45c066c96e932a85a955484ff6073537dad763faced5eb7fea13bf0f629eaa63dba77586726b354f0ee3375e5
+    size: 92929172
+path: MetaGO-Agent-1.1.9-win-x64.exe
+sha512: 3bff2e9e602b776263607e6d70a467a248fbfae45c066c96e932a85a955484ff6073537dad763faced5eb7fea13bf0f629eaa63dba77586726b354f0ee3375e5
+releaseDate: '2026-07-06T18:48:59.140Z'

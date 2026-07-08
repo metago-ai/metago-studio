@@ -197,7 +197,7 @@ export function TerminalPanel({ workspacePath }: TerminalPanelProps) {
                 <div className="text-[11px] text-zinc-400 mb-1">Web 端无法运行真实终端</div>
                 <div className="text-[10px] text-zinc-600 leading-relaxed">
                   浏览器沙箱限制，无法启动 shell 进程。<br/>
-                  请下载<a href="https://metago.life/download/MetaGO-Agent-1.1.7-win-x64.exe" className="text-accent-emerald underline">桌面端</a>获取完整终端（含 ANSI 色彩、Tab 补全、vim/htop 等）。<br/><br/>
+                  请下载<a href="https://metago.life/download/MetaGO-Agent-1.1.9-win-x64.exe" className="text-accent-emerald underline">桌面端</a>获取完整终端（含 ANSI 色彩、Tab 补全、vim/htop 等）。<br/><br/>
                   当前可查看「AI 活动」标签，实时观察 AI 调用了哪些工具。
                 </div>
               </div>

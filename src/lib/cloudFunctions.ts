@@ -50,7 +50,13 @@ export async function callFunction<T = any>(name: string, data: Record<string, u
   // aiProxy 允许未登录用户调用（Free 用户本地 10万 tokens/天 配额，由 tokenMeter 本地追踪）
   // behaviorBank 允许未登录用户调用读操作（getLevelInfo/getLeaderboard/getCreditScore 等），
   //   写操作（recordBehavior/recordBatch）的权限由云函数内部根据 openid 判断
-  const skipAuth = name === 'admin' || name === 'aiProxy' || name === 'sync' && data.action === 'submitFeedback' || name === 'userManager' || name === 'behaviorBank'
+  // subscription 使用 _clientUid 识别用户（与 aiProxy 一致），不依赖 CloudBase 登录态
+  //   修复（2026-07-08）：userManager JWT 用户无 CloudBase 非匿名登录态，subscription 不在 skipAuth 中会导致 401
+  //   support 使用独立工单系统，不依赖 CloudBase 登录态
+  // events 使用 _clientUid 识别用户，不依赖 CloudBase 登录态
+  // payment 使用独立支付系统，不依赖 CloudBase 登录态
+  // github-oauth 使用独立 OAuth 流程，不依赖 CloudBase 登录态
+  const skipAuth = name === 'admin' || name === 'aiProxy' || name === 'sync' && data.action === 'submitFeedback' || name === 'userManager' || name === 'behaviorBank' || name === 'subscription' || name === 'support' || name === 'events' || name === 'payment' || name === 'github-oauth'
   let currentUid: string | null = null
   if (skipAuth) {
     // 优先使用已登录用户的 userId（来自 userManager JWT 认证）
@@ -71,25 +77,33 @@ export async function callFunction<T = any>(name: string, data: Record<string, u
           }
         }
       }
-      // 兜底：从 currentUser 获取
+      // 兜底：从 currentUser 获取（修复：currentUser 是属性不是方法）
       if (!currentUid) {
-        const currentUser = await auth.currentUser?.()
+        const currentUser = auth.currentUser
         if (currentUser?.uid) {
           currentUid = currentUser.uid
         }
       }
-      // 终极兜底：本地生成匿名 ID（持久化到 localStorage）
-      // 此 ID 仅用于云函数识别"同一个未登录用户"，无安全含义
-      if (!currentUid) {
-        const LOCAL_KEY = 'metago_anon_uid'
-        let anonUid = localStorage.getItem(LOCAL_KEY)
+    } catch (e) {
+      // 匿名登录失败（可能控制台未启用），不阻塞——用本地 anon ID 兜底
+      console.warn(`[cloudFunctions] ${name} 匿名登录失败，使用本地 anon ID:`, e)
+    }
+    // 终极兜底：本地生成匿名 ID（持久化到 localStorage）
+    // 必须在 try/catch 外面，确保即使匿名登录抛异常也能执行
+    if (!currentUid) {
+      const LOCAL_KEY = 'metago_anon_uid'
+      let anonUid: string | null = null
+      try {
+        anonUid = localStorage.getItem(LOCAL_KEY)
         if (!anonUid) {
           anonUid = 'anon_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10)
           localStorage.setItem(LOCAL_KEY, anonUid)
         }
-        currentUid = anonUid
+      } catch {
+        anonUid = 'anon_' + Date.now().toString(36)
       }
-    } catch { /* ignore */ }
+      currentUid = anonUid
+    }
   } else {
     // 需要用户登录的云函数：只检查已有登录态，绝不自动匿名登录
     const info = await getCurrentUserInfo()
@@ -106,15 +120,58 @@ export async function callFunction<T = any>(name: string, data: Record<string, u
     if (currentUid && !payload._clientUid) {
       payload._clientUid = currentUid
     }
+
+    // aiProxy 通过 HTTP 访问服务调用，绕过 CloudBase 网关层对匿名用户的 403 EXCEED_AUTHORITY 限制
+    // HTTP 访问服务 URL: https://{envId}-{appId}.{region}.app.tcloudbase.com/api/aiproxy
+    // 云函数内部已支持 HTTP 访问服务的 event 格式（event.body 是 JSON 字符串）
+    if (name === 'aiProxy') {
+      const AIPROXY_HTTP_URL = 'https://metago-d6gfw1e4rf2a5bcad-1257074864.ap-shanghai.app.tcloudbase.com/api/aiproxy'
+      // V4.2：120 秒超时（覆盖分段生成每段 4096 token 的响应时间）
+      // 分段生成方案下，每段 4096 token 需要 10-30 秒，120 秒足够覆盖极端慢场景
+      // 如果 120 秒还没响应，说明 API 真的有问题，给用户明确错误
+      const AI_TIMEOUT_MS = 120_000
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS)
+      try {
+        const httpRes = await fetch(AIPROXY_HTTP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        })
+        clearTimeout(timeoutId)
+        const httpData = await httpRes.json()
+        if (httpData && httpData.code !== undefined) {
+          return { code: httpData.code, message: httpData.message, data: httpData.data ?? null }
+        }
+        return { code: 0, message: 'ok', data: httpData }
+      } catch (e: any) {
+        clearTimeout(timeoutId)
+        if (e?.name === 'AbortError') {
+          console.error(`[cloudFunctions] aiProxy HTTP 超时（${AI_TIMEOUT_MS / 1000}s）`)
+          return { code: 504, message: `AI 响应超时（${AI_TIMEOUT_MS / 1000}秒），请稍后重试或简化问题`, data: null }
+        }
+        console.error(`[cloudFunctions] aiProxy HTTP 调用失败:`, e)
+        return { code: 500, message: e?.message || 'aiProxy HTTP 调用失败', data: null }
+      }
+    }
+
     const res = await app.callFunction({
       name,
       data: payload,
     })
-    if (res?.result === undefined || res?.result === null) {
-      console.error(`[cloudFunctions] ${name} 返回空 result, 完整响应:`, JSON.stringify(res))
-      return { code: 500, message: '云函数返回空', data: null }
+    // 修复：CloudBase SDK 返回值可能是 { requestId, result } 或 { requestId, code, message }
+    // 云函数返回 { code: 401, message: "未登录" } 时，SDK 可能把它放在顶层而不是 result 里
+    if (res?.result !== undefined && res?.result !== null) {
+      return res.result
     }
-    return res.result
+    // result 为空，检查顶层是否有 code/message（云函数业务错误直接放顶层的情况）
+    if (res?.code !== undefined) {
+      // 云函数返回了业务错误（如 401 未登录）
+      return { code: res.code, message: res.message || '云函数业务错误', data: res.data ?? null }
+    }
+    console.error(`[cloudFunctions] ${name} 返回空 result, 完整响应:`, JSON.stringify(res))
+    return { code: 500, message: '云函数返回空', data: null }
   } catch (e: any) {
     console.error(`[cloudFunctions] ${name} 调用失败:`, e)
     return { code: 500, message: e?.message || '云函数调用失败', data: null }
@@ -125,9 +182,24 @@ export async function callFunction<T = any>(name: string, data: Record<string, u
 
 /**
  * 获取用户订阅状态（服务端权威）
+ *
+ * V4.5（2026-07-08）：传入 licenseKey 作为 fallback，解决 openid 不匹配问题
  */
 export async function getProfile(): Promise<UserProfile | null> {
-  const res = await callFunction<UserProfile>('subscription', { action: 'getProfile' })
+  // 从 localStorage 读取 licenseKey，用于 openid 不匹配时的 fallback
+  let licenseKey: string | undefined
+  try {
+    const raw = localStorage.getItem('metago_pro_license_v3')
+    if (raw) {
+      const info = JSON.parse(raw)
+      licenseKey = info.licenseKey
+    }
+  } catch { /* ignore */ }
+
+  const res = await callFunction<UserProfile>('subscription', {
+    action: 'getProfile',
+    ...(licenseKey ? { licenseKey } : {}),
+  })
   if (res.code !== 0 || !res.data) {
     console.warn('[subscription] getProfile failed:', res.message)
     return null
@@ -249,7 +321,40 @@ export async function getMetricsFromCloud(days?: number): Promise<CloudMetrics |
 
 /**
  * CloudMetrics 类型定义
+ *
+ * shieldDimensions 8维护盾各维度详细数据结构（P1 深度分析面板数据源）：
+ * - reliability/evolution 为特殊结构（基于决策锁/进化事件聚合）
+ * - traceability/objectivity/compliance/integrity/lifeform 为通用技能维度结构（buildDimension）
  */
+export interface SkillDimensionStats {
+  callCount: number
+  successCount: number
+  successRate: number
+  skills: Record<string, { count: number; successCount: number; lastCalled: string | null }>
+  recentCalls: Array<{ skillId: string; timestamp: string; success: boolean; duration: number }>
+}
+
+export interface ShieldDimensions {
+  reliability: {
+    callCount: number
+    passRate: number
+    blocked: number
+    stageBlocks: Record<string, number>
+    recentCalls: Array<{ passed: boolean; stages?: Array<{ name: string; ok: boolean }>; timestamp: string }>
+  }
+  evolution: {
+    callCount: number
+    successRate: number
+    maxDepth: number
+    recentCalls: Array<{ trigger: string; boundary: string; verified: boolean; depth: number; timestamp: string }>
+  }
+  traceability: SkillDimensionStats
+  objectivity: SkillDimensionStats
+  compliance: SkillDimensionStats
+  integrity: SkillDimensionStats
+  lifeform: SkillDimensionStats
+}
+
 export interface CloudMetrics {
   decisionLock: {
     total: number
@@ -269,6 +374,7 @@ export interface CloudMetrics {
     totalCalls: number
     coverage: number
   }
+  shieldDimensions?: ShieldDimensions
   platforms: Record<string, number>
   recentEvents: Array<Record<string, unknown>>
 }
@@ -439,4 +545,74 @@ export async function getLevelInfoCloud(): Promise<{
   }>('behaviorBank', { action: 'getLevelInfo' })
   if (res.code !== 0 || !res.data) return null
   return res.data
+}
+
+// ============ FDE 服务模式项目管理 ============
+
+export interface FdeTeamMember {
+  role: 'tech_lead' | 'ai_engineer' | 'domain_expert' | 'ai_agent' | 'pm'
+  name: string
+  uid?: string
+  agentId?: string
+}
+
+export interface FdeStage {
+  name: string
+  status: 'pending' | 'in_progress' | 'completed'
+  startDate: string | null
+  endDate: string | null
+}
+
+export interface FdeProject {
+  _id: string
+  projectName: string
+  client: string
+  clientContact: string
+  description: string
+  budget: number
+  team: FdeTeamMember[]
+  stages: FdeStage[]
+  status: 'active' | 'completed' | 'paused' | 'cancelled'
+  progress: number
+  createdAt: string
+  updatedAt: string
+}
+
+export async function createFdeProject(params: {
+  projectName: string
+  client: string
+  clientContact?: string
+  description?: string
+  budget?: number
+  team?: FdeTeamMember[]
+  stages?: FdeStage[]
+}): Promise<{ success: boolean; message: string; projectId?: string }> {
+  const res = await callAdminFunction<{ _id: string }>('createFdeProject', params)
+  return {
+    success: res.code === 0,
+    message: res.message || '创建失败',
+    projectId: res.data?._id,
+  }
+}
+
+export async function listFdeProjects(status?: string): Promise<FdeProject[]> {
+  const res = await callAdminFunction<{ list: FdeProject[]; total: number }>('listFdeProjects', { status: status || '' })
+  if (res.code !== 0 || !res.data) return []
+  return res.data.list || []
+}
+
+export async function getFdeProject(projectId: string): Promise<FdeProject | null> {
+  const res = await callAdminFunction<FdeProject>('getFdeProject', { projectId })
+  if (res.code !== 0 || !res.data) return null
+  return res.data
+}
+
+export async function updateFdeProject(projectId: string, updates: Partial<FdeProject>): Promise<{ success: boolean; message: string }> {
+  const res = await callAdminFunction('updateFdeProject', { projectId, updates })
+  return { success: res.code === 0, message: res.message || '更新失败' }
+}
+
+export async function deleteFdeProject(projectId: string): Promise<{ success: boolean; message: string }> {
+  const res = await callAdminFunction('deleteFdeProject', { projectId })
+  return { success: res.code === 0, message: res.message || '删除失败' }
 }

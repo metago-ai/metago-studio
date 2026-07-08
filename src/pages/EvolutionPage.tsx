@@ -7,13 +7,12 @@ import {
 } from 'recharts'
 import {
   Dna, Download, TrendingUp, Clock, CheckCircle2, ArrowDownRight, ArrowUpRight,
-  RefreshCw, GitBranch, Plus, Trash2, X,
+  RefreshCw, GitBranch, Trash2, X,
   Compass, Search, Sparkle, ShieldCheck, Repeat, ArrowRight,
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { exportAndDownloadJSON, exportAndDownloadMarkdown } from '../lib/evolutionArchive'
 import { ShareButton } from '../components/ShareButton'
-import type { EvolutionRecord } from '../types'
 
 const TIME_RANGES = [
   { id: '7d', label: '7 天' },
@@ -34,7 +33,7 @@ const QUICK_TRIGGERS = [
 ]
 
 export function EvolutionPage() {
-  const { evolutionRecords, evolutionStats, addEvolutionRecord, removeEvolutionRecord, features, cloudMetrics, syncMetricsFromCloud } = useStore()
+  const { evolutionRecords, evolutionStats, removeEvolutionRecord, features, cloudMetrics, syncMetricsFromCloud, triggerRealEvolution } = useStore()
 
   // 拉取真实云端进化数据
   useEffect(() => {
@@ -62,41 +61,36 @@ export function EvolutionPage() {
   const [newBoundary, setNewBoundary] = useState('')
   const [addError, setAddError] = useState<string | null>(null)
   const [addSuccess, setAddSuccess] = useState(false)
+  const [isEvolving, setIsEvolving] = useState(false)
 
   const chartData = evolutionStats.dailyCounts.map((d) => ({
     date: d.date.slice(5), // MM-DD
     进化次数: d.count,
   }))
 
-  const handleAddRecord = () => {
+  const handleAddRecord = async () => {
     if (!newTrigger.trim() || !newBoundary.trim()) return
     setAddError(null)
     setAddSuccess(false)
-    const record: EvolutionRecord = {
-      id: `evo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      timestamp: new Date().toISOString(),
-      trigger: newTrigger,
-      boundary: newBoundary,
-      gap: `缺少 ${newTrigger} 相关知识，需要从已知领域推断`,
-      generated: `基于已有知识推断 ${newTrigger} 的语义和用法`,
-      verified: true,
-      recursed: false,
-      durationMs: 0,
-      depth: 1,
-    }
+    setIsEvolving(true)
     try {
-      addEvolutionRecord(record)
-      setAddSuccess(true)
-      setNewTrigger('')
-      setNewBoundary('')
-      // 延迟关闭模态框，让用户看到成功提示
-      setTimeout(() => {
-        setShowAddModal(false)
-        setAddSuccess(false)
-      }, 600)
+      const result = await triggerRealEvolution(newTrigger.trim(), newBoundary.trim())
+      if (result.success) {
+        setAddSuccess(true)
+        setNewTrigger('')
+        setNewBoundary('')
+        setTimeout(() => {
+          setShowAddModal(false)
+          setAddSuccess(false)
+        }, 1200)
+      } else {
+        setAddError(result.message)
+      }
     } catch (e) {
-      console.error('[EvolutionPage] 添加记录失败', e)
+      console.error('[EvolutionPage] 元进化触发失败', e)
       setAddError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setIsEvolving(false)
     }
   }
 
@@ -150,8 +144,8 @@ export function EvolutionPage() {
               onClick={() => setShowAddModal(true)}
               className="btn-primary text-xs"
             >
-              <Plus className="w-3.5 h-3.5" />
-              添加记录
+              <Dna className="w-3.5 h-3.5" />
+              触发元进化
             </button>
           )}
         </div>
@@ -527,7 +521,7 @@ export function EvolutionPage() {
         )}
       </motion.div>
 
-      {/* 添加记录模态框 */}
+      {/* 触发真实元进化模态框 */}
       <AnimatePresence>
         {showAddModal && (
           <motion.div
@@ -535,7 +529,7 @@ export function EvolutionPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-bg-deep/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowAddModal(false)}
+            onClick={() => !isEvolving && setShowAddModal(false)}
           >
             <motion.div
               initial={{ scale: 0.96, opacity: 0 }}
@@ -545,8 +539,15 @@ export function EvolutionPage() {
               className="bg-bg-card border border-border-default rounded-xl w-full max-w-md"
             >
               <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-                <h3 className="text-sm font-semibold text-zinc-100">添加进化记录</h3>
-                <button onClick={() => setShowAddModal(false)} className="text-zinc-400 hover:text-zinc-200">
+                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                  <Dna className="w-4 h-4 text-accent-teal" />
+                  触发真实元进化
+                </h3>
+                <button
+                  onClick={() => !isEvolving && setShowAddModal(false)}
+                  disabled={isEvolving}
+                  className="text-zinc-400 hover:text-zinc-200 disabled:opacity-40"
+                >
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -557,8 +558,9 @@ export function EvolutionPage() {
                     {QUICK_TRIGGERS.map(t => (
                       <button
                         key={t}
-                        onClick={() => setNewTrigger(t)}
-                        className={`text-[10px] px-2 py-1 rounded ${newTrigger === t ? 'bg-accent-emerald/20 text-accent-emerald' : 'bg-bg-elevated text-zinc-400 hover:text-zinc-200'}`}
+                        onClick={() => !isEvolving && setNewTrigger(t)}
+                        disabled={isEvolving}
+                        className={`text-[10px] px-2 py-1 rounded disabled:opacity-40 ${newTrigger === t ? 'bg-accent-emerald/20 text-accent-emerald' : 'bg-bg-elevated text-zinc-400 hover:text-zinc-200'}`}
                       >
                         {t}
                       </button>
@@ -569,7 +571,8 @@ export function EvolutionPage() {
                     value={newTrigger}
                     onChange={e => setNewTrigger(e.target.value)}
                     placeholder="例如：Rust async/await"
-                    className="input-base text-sm"
+                    disabled={isEvolving}
+                    className="input-base text-sm disabled:opacity-40"
                   />
                 </div>
                 <div>
@@ -579,30 +582,60 @@ export function EvolutionPage() {
                     onChange={e => setNewBoundary(e.target.value)}
                     placeholder="例如：无法处理 Rust 的 async fn 语法"
                     rows={3}
-                    className="input-base text-sm"
+                    disabled={isEvolving}
+                    className="input-base text-sm disabled:opacity-40"
                   />
                 </div>
+                {isEvolving && (
+                  <div className="text-xs p-3 rounded bg-accent-teal/10 text-accent-teal border border-accent-teal/30 flex items-center gap-2">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                      className="w-3.5 h-3.5 border-2 border-accent-teal/30 border-t-accent-teal rounded-full"
+                    />
+                    AI 正在执行五阶段循环：边界感知 → 差距分析 → 自生成 → 验证 → 递归...
+                  </div>
+                )}
                 {addError && (
                   <div className="text-xs p-2 rounded bg-accent-rose/10 text-accent-rose border border-accent-rose/30">
-                    添加失败：{addError}
+                    进化失败：{addError}
                   </div>
                 )}
                 {addSuccess && (
                   <div className="text-xs p-2 rounded bg-accent-emerald/10 text-accent-emerald border border-accent-emerald/30 flex items-center gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    记录已添加，正在关闭...
+                    元进化完成，新能力已生成并归档...
                   </div>
                 )}
               </div>
               <div className="flex gap-2 p-4 border-t border-border-subtle">
-                <button onClick={() => { setShowAddModal(false); setAddError(null); setAddSuccess(false) }} className="btn-ghost flex-1 text-sm">取消</button>
+                <button
+                  onClick={() => { setShowAddModal(false); setAddError(null); setAddSuccess(false) }}
+                  disabled={isEvolving}
+                  className="btn-ghost flex-1 text-sm disabled:opacity-40"
+                >
+                  取消
+                </button>
                 <button
                   onClick={handleAddRecord}
-                  disabled={!newTrigger.trim() || !newBoundary.trim() || addSuccess}
+                  disabled={!newTrigger.trim() || !newBoundary.trim() || addSuccess || isEvolving}
                   className="btn-primary flex-1 text-sm disabled:opacity-40"
                 >
-                  <Plus className="w-4 h-4" />
-                  {addSuccess ? '已添加' : '添加记录'}
+                  {isEvolving ? (
+                    <>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                        className="w-4 h-4 border-2 border-bg-deep border-t-transparent rounded-full"
+                      />
+                      进化中...
+                    </>
+                  ) : (
+                    <>
+                      <Dna className="w-4 h-4" />
+                      {addSuccess ? '已完成' : '触发真实元进化'}
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>

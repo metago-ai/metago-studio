@@ -22,6 +22,8 @@ export default {
         'accent-amber': '#f59e0b',
         'accent-rose': '#f43f5e',
         'accent-blue': '#00d4ff',
+        'accent-life': '#22c55e',
+        'accent-purple': '#a855f7',
       },
       fontFamily: {
         'sans': ['Inter', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],

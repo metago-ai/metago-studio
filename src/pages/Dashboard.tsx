@@ -2,10 +2,11 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Sparkles, Dna, Shield, Code2, Scale, Play, ArrowRight, TrendingUp,
-  Activity as ActivityIcon, Crown, Settings as SettingsIcon,
+  Activity as ActivityIcon, Crown, Settings as SettingsIcon, ShieldCheck,
 } from 'lucide-react'
 import { StatCard } from '../components/StatCard'
 import { ActivityList } from '../components/ActivityList'
+import { LifeformStatus } from '../components/LifeformStatus'
 import { useStore } from '../store/useStore'
 import { useAuth } from '../contexts/AuthContext'
 import { TIER_INFO } from '../lib/proGate'
@@ -34,6 +35,14 @@ const QUICK_ENTRIES = [
     description: '五阶段循环：边界→递归',
     accent: 'teal' as const,
     to: '/evolution',
+  },
+  {
+    id: 'shield-panel',
+    name: '8 维护盾',
+    icon: ShieldCheck,
+    description: 'Harness 层可视化 · 生命体状态',
+    accent: 'teal' as const,
+    to: '/shield',
   },
 ]
 
@@ -130,6 +139,14 @@ export function Dashboard() {
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.08 }}
+      >
+        <LifeformStatus />
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.1 }}
       >
         <div className="flex items-center justify-between mb-4">
@@ -144,7 +161,7 @@ export function Dashboard() {
             查看全部 <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {QUICK_ENTRIES.map((entry) => {
             const Icon = entry.icon
             return (

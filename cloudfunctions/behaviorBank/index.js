@@ -80,9 +80,15 @@ exports.main = async (event, context) => {
 
   // 身份识别（与 events 云函数保持一致）
   const wxContext = cloud.getWXContext()
-  const openid = wxContext.OPENID || wxContext.UID || wxContext.APPID
-    || event.userInfo?.openid || event.userInfo?.openId || event.userInfo?.uid
-    || event.openid || event.uid || event._clientUid
+  const openid = event._clientUid
+    || event.uid
+    || event.openid
+    || event.userInfo?.uid
+    || event.userInfo?.openId
+    || event.userInfo?.openid
+    || wxContext.OPENID
+    || wxContext.UID
+    || wxContext.APPID
 
   const action = event.action
   const adminToken = event.adminToken

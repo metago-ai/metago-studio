@@ -51,6 +51,23 @@ const api = {
     diff: (rootPath: string, filePath: string) => ipcRenderer.invoke('git:diff', rootPath, filePath),
   },
 
+  // === Shell 命令执行（AI Agent 自主调用） ===
+  shell: {
+    exec: (command: string, cwd?: string) => ipcRenderer.invoke('shell:exec', command, cwd),
+    // V3: 流式执行，实时推送 stdout/stderr
+    execStream: (command: string, cwd?: string) => ipcRenderer.invoke('shell:exec:stream', command, cwd),
+    onStreamData: (callback: (data: { stream: 'stdout' | 'stderr'; data: string }) => void) => {
+      ipcRenderer.on('shell:stream:data', (_e, data) => callback(data))
+    },
+    onStreamDone: (callback: (result: { stdout: string; stderr: string; exitCode: number | null; duration: number }) => void) => {
+      ipcRenderer.on('shell:stream:done', (_e, data) => callback(data))
+    },
+    removeStreamListeners: () => {
+      ipcRenderer.removeAllListeners('shell:stream:data')
+      ipcRenderer.removeAllListeners('shell:stream:done')
+    },
+  },
+
   // === 系统 ===
   system: {
     openExternal: (url: string) => ipcRenderer.invoke('system:openExternal', url),

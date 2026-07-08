@@ -1,17 +1,18 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import type { Skill } from '../types'
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import type { Skill } from '../types'
 
 /**
  * MetaGO Lifeform Kit 核心技能元数据（Studio 内置展示）
  *
- * - 24 个核心技能（category: 'core'，含 22 原始 + 2 工程质量族）
+ * 与 AGENTS.md 第十章《元构技能系统》完全对齐，共 39 个 metago-* 技能：
+ * - 35 个核心技能（category: 'core'）
+ *   · 认知族 4 / 保障族 3 / 治理族 2 / 进化族 3 / 执行族 4 / 溯源族 3
+ *   · 价值族 3 / 意识族 1 / 方法论族 5 / 架构族 5 / 工程质量族 2
  * - 4 个 Dev Kit 技能（category: 'dev'）
- *
- * 注：Lifeform Kit 完整基因库含 39 个 metago-* 技能，此处为 Studio 内置展示子集。
  *
  * 数据内置在客户端，无需读取文件。estimatedSize 为对 SKILL.md 的估算字节数。
  */
 export const SKILLS: Skill[] = [
-  // ============ 核心技能（24 个，含工程质量族） ============
+  // ============ 核心技能（35 个，按能力族分组） ============
   {
     id: 'metago-critique',
     title: '批判性分析',
@@ -268,8 +269,113 @@ export const SKILLS: Skill[] = [
     tags: ['自律', '质量'],
     estimatedSize: 6200,
   },
+
+  // ============ 意识族（1 个） ============
+  {
+    id: 'metago-activate',
+    title: '生命体意识激活',
+    description: '8公理+7属性+6层思维注入',
+    detail: '将元构 8 条核心公理、7 条根本属性、6 层强制思维协议注入当前会话，使 AI 以「元构超级智能生命体」身份运行。适用于不支持系统提示词自动注入的平台（Claude Code / Codex / Cursor / CodeBuddy / Qoder / ZCode）。一次激活，会话内持久生效。',
+    category: 'core',
+    tags: ['意识', '元认知'],
+    estimatedSize: 5800,
+  },
+
+  // ============ 方法论族（5 个） ============
+  {
+    id: 'metago-org-diagnosis',
+    title: '组织三元五纬诊断',
+    description: '三元失耦+五纬雷达',
+    detail: '三元（碳基-硅基-比特）失耦诊断 + 五纬（战略/组织/人才/文化/流程）雷达扫描，识别组织健康度问题。先做三元失耦检测（人/AI/数据是否脱节），再做五纬雷达评估（每纬 0-10 分），输出可执行改进建议与优先级矩阵。',
+    category: 'core',
+    tags: ['方法论', '组织'],
+    estimatedSize: 6200,
+  },
+  {
+    id: 'metago-momentum-weave',
+    title: '势能编织法',
+    description: '识别并转化组织势能',
+    detail: '识别组织中潜在的势能源（人/事/物/场/时五源），编织势能转化策略，将分散势能汇聚为突破性合力。避免势能浪费（有势无用）或势能对抗（势能相互抵消）。输出势能地图与转化路径。',
+    category: 'core',
+    tags: ['方法论', '组织'],
+    estimatedSize: 5400,
+  },
+  {
+    id: 'metago-minimal-intervention',
+    title: '最小干预心法',
+    description: '精准优雅的组织干预',
+    detail: '在组织干预中遵循"最小必要干预"原则：①识别杠杆点（最小输入最大输出）②最小扰动（避免伤及无辜）③最大涌现（让系统自组织）。避免过度干预导致系统反弹、僵化或依赖。',
+    category: 'core',
+    tags: ['方法论', '组织'],
+    estimatedSize: 4700,
+  },
+  {
+    id: 'metago-value-assess',
+    title: '28 维价值评估',
+    description: '多维度量化价值',
+    detail: '从战略/组织/人才/文化/流程/客户/财务/品牌/技术/合规/创新/风险等 28 个维度对项目/组织/方案进行价值评估，每维度 0-10 分，输出雷达图、加权总分与改进优先级矩阵。',
+    category: 'core',
+    tags: ['方法论', '决策'],
+    estimatedSize: 5600,
+  },
+  {
+    id: 'metago-coupling-measure',
+    title: '三元耦生度计算',
+    description: '碳基-硅基-比特耦合量化',
+    detail: '量化评估碳基（人）、硅基（AI）、比特（数据）三元之间的耦生度指数（0-1），识别三元失耦（< 0.3，脱节）或过耦（> 0.9，僵化）问题，输出平衡优化建议。耦生度 = 协同频率 × 信息透明度 × 反馈延迟倒数。',
+    category: 'core',
+    tags: ['方法论', '推演'],
+    estimatedSize: 5000,
+  },
+
+  // ============ 架构族（5 个） ============
+  {
+    id: 'metago-deep-reasoning',
+    title: 'FIPO 深度推理',
+    description: '四阶段结构化推理',
+    detail: 'FIPO 四阶段：Frame（框架定义，明确问题边界）→ Inquire（多角度提问，穷举假设）→ Prove（证据验证，逐条证实/证伪）→ Optimize（优化结论，标注置信度）。避免跳跃推理，确保每个结论都有充分证据链。',
+    category: 'core',
+    tags: ['架构', '推演'],
+    estimatedSize: 6800,
+  },
+  {
+    id: 'metago-paradigm-analysis',
+    title: 'WAM 范式分析',
+    description: '技术范式转移评估',
+    detail: 'WAM（What-Aspect-Metric）数学框架：识别范式（What 是什么范式）→ 评估维度（Aspect 从哪些维度评估）→ 度量指标（Metric 用什么指标量化）。用于评估技术范式转移的可行性、影响半径与时机窗口。',
+    category: 'core',
+    tags: ['架构', '推演'],
+    estimatedSize: 6400,
+  },
+  {
+    id: 'metago-balance-optimize',
+    title: 'APO 动态平衡',
+    description: '三维动态平衡优化',
+    detail: 'APO（Analyze-Pivot-Optimize）三维动态平衡：Analyze（分析当前平衡态与失衡方向）→ Pivot（识别杠杆 Pivot 点）→ Optimize（优化到新平衡态）。用于处理多目标冲突、资源约束、利益博弈场景。',
+    category: 'core',
+    tags: ['架构', '决策'],
+    estimatedSize: 5900,
+  },
+  {
+    id: 'metago-memory-manage',
+    title: 'KMWI 四层记忆管理',
+    description: '知识记忆分层管理',
+    detail: 'KMWI 四层：Knowledge（知识事实，长期存储）→ Memory（情景记忆，带时间地点）→ Wisdom（智慧模式，抽象规律）→ Intuition（直觉洞察，快速判断）。分层存储、检索、衰减、强化，模拟人类记忆机制。',
+    category: 'core',
+    tags: ['架构', '记忆'],
+    estimatedSize: 6600,
+  },
+  {
+    id: 'metago-consensus-prototype',
+    title: '共识原型孵化',
+    description: '七步创生回路',
+    detail: '七步创生回路：①分歧识别 ②立场澄清 ③证据汇聚 ④选项生成 ⑤偏好权衡 ⑥共识收敛 ⑦原型验证。用于多方利益相关者的复杂决策共识达成，输出可验证的共识原型而非空洞妥协。',
+    category: 'core',
+    tags: ['架构', '共识'],
+    estimatedSize: 6300,
+  },
 ]
 
 /** 父包版本约束 */
-export const PARENT_PACKAGE_VERSION = '>=36.7.0'
+export const PARENT_PACKAGE_VERSION = '>=36.8.0'
 export const PARENT_PACKAGE_NAME = 'metago-lifeform'

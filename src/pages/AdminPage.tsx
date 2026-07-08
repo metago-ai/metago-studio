@@ -4,12 +4,24 @@ import {
   Users, Crown, Receipt, Ticket, BarChart3, Search, RefreshCw,
   Ban, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Plus, Copy,
   MessageSquare, Send, Shield, AlertTriangle, LogIn, LogOut, Lock, User,
-  Cpu,
+  Cpu, Database, Activity, Zap, Key, FileText, Settings, AlertCircle, GitBranch, Cog,
 } from 'lucide-react'
 import { callAdminHttp } from '../lib/adminHttp'
 import { AgentAdminPanel } from '../components/admin/AgentAdminPanel'
+import { DataExplorerPanel } from '../components/admin/DataExplorerPanel'
+import { TabErrorBoundary } from '../components/admin/ErrorBoundary'
+import {
+  PrivateSkillReviewPanel,
+  BehaviorBankPanel,
+  PlatformConfigPanel,
+  ErrorMonitorPanel,
+} from '../components/admin/SpecialPanels'
 
-type TabType = 'overview' | 'users' | 'orders' | 'licenses' | 'feedback' | 'agent'
+type TabType =
+  | 'overview' | 'users' | 'orders' | 'licenses' | 'subscriptions' | 'certify_orders' | 'feedback'
+  | 'agent' | 'token_logs' | 'agent_config'
+  | 'decision_locks' | 'evolution' | 'behavior_bank' | 'private_skills' | 'byok'
+  | 'platform_config' | 'error_monitor' | 'sync_logs'
 
 interface Stats {
   users: { total: number; todayNew: number; todayActive: number; weekActive: number; monthActive: number }
@@ -38,6 +50,7 @@ interface Order {
   orderId: string
   openid: string
   plan: string
+  planName?: string
   amount: number
   status: string
   licenseKey?: string
@@ -93,7 +106,7 @@ export function AdminPage() {
   const [genCount, setGenCount] = useState(1)
   const [genDays, setGenDays] = useState(30)
   const [genNote, setGenNote] = useState('')
-  const [genResult, setGenResult] = useState<{ key: string; expiresAt: string }[]>([])
+  const [genResult, setGenResult] = useState<{ licenseKey: string; expiresAt: string; plan?: string }[]>([])
   const [feedback, setFeedback] = useState<Feedback[]>([])
   const [replyText, setReplyText] = useState<Record<string, string>>({})
 
@@ -240,12 +253,97 @@ export function AdminPage() {
     else if (newTab === 'feedback') loadFeedback()
   }
 
-  const handleBanUser = async (targetOpenid: string, banned: boolean) => {
-    if (!confirm(banned ? '确认封禁该用户？' : '确认解封该用户？')) return
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleBanUser = async (targetId: string, banned: boolean) => {
+    if (!confirm(banned ? '确认封禁该用户？封禁后该用户将无法登录和使用。' : '确认解封该用户？')) return
     setLoading(true)
     try {
-      await adminCall('banUser', { targetOpenid, banned })
-      await loadUsers(usersPage)
+      const res = await adminCall('banUser', { targetId, banned })
+      if (res.code !== 0) {
+        showToast(res.message || '操作失败', 'error')
+      } else {
+        showToast(banned ? '已封禁用户' : '已解封用户')
+        await loadUsers(usersPage)
+      }
+    } catch (e: any) {
+      showToast(e?.message || '网络错误', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResetQuota = async (targetId: string) => {
+    if (!confirm('确认重置该用户的 Token 配额？这将把已用配额清零。')) return
+    setLoading(true)
+    try {
+      const res = await adminCall('resetUserQuota', { targetId })
+      if (res.code !== 0) {
+        showToast(res.message || '操作失败', 'error')
+      } else {
+        showToast('配额已重置')
+      }
+    } catch (e: any) {
+      showToast(e?.message || '网络错误', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdateTier = async (targetId: string, tier: string) => {
+    if (!confirm(`确认将该用户套餐修改为 ${tier}？`)) return
+    setLoading(true)
+    try {
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      const res = await adminCall('updateUserTier', { targetId, tier, expiresAt })
+      if (res.code !== 0) {
+        showToast(res.message || '操作失败', 'error')
+      } else {
+        showToast(`已修改为 ${tier} 套餐`)
+        await loadUsers(usersPage)
+      }
+    } catch (e: any) {
+      showToast(e?.message || '网络错误', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancelOrder = async (orderId: string) => {
+    if (!confirm(`确认取消订单 ${orderId}？`)) return
+    setLoading(true)
+    try {
+      const res = await adminCall('cancelOrder', { orderId })
+      if (res.code !== 0) {
+        showToast(res.message || '操作失败', 'error')
+      } else {
+        showToast('订单已取消')
+        await loadOrders()
+      }
+    } catch (e: any) {
+      showToast(e?.message || '网络错误', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleMarkOrderPaid = async (orderId: string) => {
+    if (!confirm(`确认将订单 ${orderId} 标记为已付款？这将立即激活对应套餐。`)) return
+    setLoading(true)
+    try {
+      const res = await adminCall('markOrderPaid', { orderId })
+      if (res.code !== 0) {
+        showToast(res.message || '操作失败', 'error')
+      } else {
+        showToast('订单已标记为已付')
+        await loadOrders()
+      }
+    } catch (e: any) {
+      showToast(e?.message || '网络错误', 'error')
     } finally {
       setLoading(false)
     }
@@ -394,14 +492,48 @@ export function AdminPage() {
     )
   }
 
-  const tabs: { id: TabType; label: string; icon: typeof BarChart3 }[] = [
-    { id: 'overview', label: '总览', icon: BarChart3 },
-    { id: 'users', label: '用户管理', icon: Users },
-    { id: 'orders', label: '订单管理', icon: Receipt },
-    { id: 'licenses', label: '授权码', icon: Ticket },
-    { id: 'feedback', label: '用户反馈', icon: MessageSquare },
-    { id: 'agent', label: 'Agent 管理', icon: Cpu },
+  const tabGroups: { group: string; items: { id: TabType; label: string; icon: typeof BarChart3 }[] }[] = [
+    {
+      group: '商业运营',
+      items: [
+        { id: 'overview', label: '总览', icon: BarChart3 },
+        { id: 'users', label: '用户管理', icon: Users },
+        { id: 'orders', label: '订单管理', icon: Receipt },
+        { id: 'licenses', label: '授权码', icon: Ticket },
+        { id: 'subscriptions', label: '订阅记录', icon: Crown },
+        { id: 'certify_orders', label: '认证订单', icon: CheckCircle2 },
+        { id: 'feedback', label: '用户反馈', icon: MessageSquare },
+      ],
+    },
+    {
+      group: 'Agent 业务',
+      items: [
+        { id: 'agent', label: 'Agent 管理', icon: Cpu },
+        { id: 'token_logs', label: 'Token 日志', icon: Activity },
+        { id: 'agent_config', label: '智能体配置', icon: Cog },
+      ],
+    },
+    {
+      group: '元构特色',
+      items: [
+        { id: 'decision_locks', label: '决策锁审计', icon: Lock },
+        { id: 'evolution', label: '进化记录', icon: GitBranch },
+        { id: 'behavior_bank', label: '行为银行', icon: Zap },
+        { id: 'private_skills', label: '私有技能审核', icon: FileText },
+        { id: 'byok', label: 'BYOK 绑定', icon: Key },
+      ],
+    },
+    {
+      group: '平台治理',
+      items: [
+        { id: 'platform_config', label: '平台配置', icon: Settings },
+        { id: 'error_monitor', label: '错误监控', icon: AlertCircle },
+        { id: 'sync_logs', label: '同步日志', icon: Database },
+      ],
+    },
   ]
+
+  const currentTabLabel = tabGroups.flatMap(g => g.items).find(i => i.id === tab)?.label || tab
 
   // ========== 管理后台主界面 ==========
   return (
@@ -429,32 +561,44 @@ export function AdminPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-bg-elevated/50 rounded-lg w-fit overflow-x-auto">
-        {tabs.map(t => {
-          const Icon = t.icon
-          return (
-            <button
-              key={t.id}
-              onClick={() => handleTabChange(t.id)}
-              className={`px-4 py-2 rounded-md text-sm flex items-center gap-2 transition-colors whitespace-nowrap ${
-                tab === t.id ? 'bg-accent-emerald/20 text-accent-emerald' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {t.label}
-            </button>
-          )
-        })}
-      </div>
+      {/* 主内容：侧边栏 + 右侧 */}
+      <div className="flex gap-4">
+        {/* 侧边栏 */}
+        <aside className="w-56 flex-shrink-0 space-y-4">
+          {tabGroups.map(group => (
+            <div key={group.group}>
+              <div className="text-xs text-zinc-500 mb-1 px-2 uppercase tracking-wider">{group.group}</div>
+              <div className="space-y-0.5">
+                {group.items.map(item => {
+                  const Icon = item.icon
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleTabChange(item.id)}
+                      className={`w-full text-left px-3 py-2 rounded text-sm flex items-center gap-2 transition-colors ${
+                        tab === item.id ? 'bg-accent-emerald/20 text-accent-emerald' : 'text-zinc-400 hover:text-zinc-200 hover:bg-bg-hover/30'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {item.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </aside>
 
-      {error && (
-        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center gap-2 text-sm text-red-400">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          {error}
-        </div>
-      )}
+        {/* 右侧主内容 */}
+        <div className="flex-1 min-w-0 space-y-4">
+          {error && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center gap-2 text-sm text-red-400">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
 
+      <TabErrorBoundary tabLabel={currentTabLabel}>
       {/* Overview */}
       {tab === 'overview' && stats && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -563,7 +707,7 @@ export function AdminPage() {
                   <tr key={u._id} className="border-t border-border-subtle hover:bg-bg-hover/30">
                     <td className="px-4 py-3">
                       <div className="font-medium text-zinc-200">{u.displayName || '未设置'}</div>
-                      <div className="text-xs text-zinc-500">{u.email || u.phone || u.openid.slice(0, 16) + '...'}</div>
+                      <div className="text-xs text-zinc-500">{u.email || u.phone || (u.openid ? u.openid.slice(0, 16) + '...' : '未知用户')}</div>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded text-xs ${
@@ -580,7 +724,7 @@ export function AdminPage() {
                       {u.expiresAt ? new Date(u.expiresAt).toLocaleDateString('zh-CN') : '—'}
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-400">
-                      {new Date(u.createdAt).toLocaleDateString('zh-CN')}
+                      {u.createdAt ? new Date(u.createdAt).toLocaleDateString('zh-CN') : '—'}
                     </td>
                     <td className="px-4 py-3">
                       {u.banned ? (
@@ -589,15 +733,38 @@ export function AdminPage() {
                         <span className="text-xs text-accent-emerald">正常</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => handleBanUser(u.openid, !u.banned)}
-                        className={`text-xs px-2 py-1 rounded ${
-                          u.banned ? 'text-accent-emerald hover:bg-accent-emerald/10' : 'text-red-400 hover:bg-red-500/10'
-                        }`}
-                      >
-                        {u.banned ? '解封' : '封禁'}
-                      </button>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleBanUser(u._id, !u.banned)}
+                          className={`text-xs px-2 py-1 rounded ${
+                            u.banned ? 'text-accent-emerald hover:bg-accent-emerald/10' : 'text-red-400 hover:bg-red-500/10'
+                          }`}
+                        >
+                          {u.banned ? '解封' : '封禁'}
+                        </button>
+                        <button
+                          onClick={() => handleResetQuota(u._id)}
+                          className="text-xs px-2 py-1 rounded text-accent-blue hover:bg-accent-blue/10"
+                          title="重置 Token 配额"
+                        >
+                          重置配额
+                        </button>
+                        <button
+                          onClick={() => {
+                            const tier = prompt('输入新套餐（free / pro / pro_plus / team / enterprise）：', u.tier || 'free')
+                            if (tier && ['free', 'pro', 'pro_plus', 'team', 'enterprise'].includes(tier)) {
+                              handleUpdateTier(u._id, tier)
+                            } else if (tier) {
+                              alert('无效套餐，请输入：free / pro / pro_plus / team / enterprise')
+                            }
+                          }}
+                          className="text-xs px-2 py-1 rounded text-accent-amber hover:bg-accent-amber/10"
+                          title="修改用户套餐"
+                        >
+                          改套餐
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -638,18 +805,19 @@ export function AdminPage() {
                   <th className="px-4 py-3">金额</th>
                   <th className="px-4 py-3">状态</th>
                   <th className="px-4 py-3">时间</th>
+                  <th className="px-4 py-3">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {orders.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-12 text-center text-zinc-600">暂无订单</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-12 text-center text-zinc-600">暂无订单</td></tr>
                 ) : orders.map(o => (
                   <tr key={o._id} className="border-t border-border-subtle">
                     <td className="px-4 py-3 text-xs text-zinc-400 font-mono">{o.orderId}</td>
-                    <td className="px-4 py-3 text-xs text-zinc-400">{o.openid.slice(0, 12)}...</td>
+                    <td className="px-4 py-3 text-xs text-zinc-400">{o.openid ? o.openid.slice(0, 12) + '...' : '—'}</td>
                     <td className="px-4 py-3">
                       <span className="text-xs">
-                        {o.plan === 'monthly' ? '月度' : o.plan === 'yearly' ? '年度' : o.plan === 'pro_plus' ? 'Pro+ 月度' : o.plan === 'pro_plus_year' ? 'Pro+ 年度' : o.plan === 'team' ? 'Team 月度' : o.plan === 'team_year' ? 'Team 年度' : o.plan === 'enterprise' ? 'Enterprise 年度' : o.orderType === 'certify' ? 'Certify 认证' : o.orderType === 'seats' ? 'Enterprise 加席' : o.plan}
+                        {o.planName || (o.plan === 'monthly' ? '月度' : o.plan === 'yearly' ? '年度' : o.plan === 'pro_plus' ? 'Pro+ 月度' : o.plan === 'pro_plus_year' ? 'Pro+ 年度' : o.plan === 'team' ? 'Team 月度' : o.plan === 'team_year' ? 'Team 年度' : o.plan === 'enterprise' ? 'Enterprise 年度' : o.orderType === 'certify' ? 'Certify 认证' : o.orderType === 'seats' ? 'Enterprise 加席' : o.plan)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs">
@@ -659,14 +827,35 @@ export function AdminPage() {
                       <OrderStatusBadge status={o.status} />
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-400">
-                      {new Date(o.createdAt).toLocaleString('zh-CN')}
+                      {o.createdAt ? new Date(o.createdAt).toLocaleString('zh-CN') : '—'}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {o.status === 'pending' && (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleMarkOrderPaid(o.orderId)}
+                            className="text-xs px-2 py-1 rounded text-accent-emerald hover:bg-accent-emerald/10"
+                          >
+                            标记已付
+                          </button>
+                          <button
+                            onClick={() => handleCancelOrder(o.orderId)}
+                            className="text-xs px-2 py-1 rounded text-red-400 hover:bg-red-500/10"
+                          >
+                            取消
+                          </button>
+                        </div>
+                      )}
+                      {o.status !== 'pending' && (
+                        <span className="text-xs text-zinc-600">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-zinc-600">共 {ordersTotal} 条订单</p>
+          <p className="text-xs text-zinc-600">共 {ordersTotal} 条订单 · 仅 pending 状态订单可操作</p>
         </motion.div>
       )}
 
@@ -737,10 +926,10 @@ export function AdminPage() {
                 <p className="text-xs text-accent-emerald">生成成功！点击右侧复制按钮可复制授权码：</p>
                 {genResult.map((l, i) => (
                   <div key={i} className="flex items-center gap-2 bg-bg-elevated/50 rounded px-3 py-2">
-                    <code className="text-xs font-mono text-accent-emerald flex-1">{l.key}</code>
+                    <code className="text-xs font-mono text-accent-emerald flex-1">{l.licenseKey}</code>
                     <span className="text-xs text-zinc-500">有效期至 {new Date(l.expiresAt).toLocaleDateString('zh-CN')}</span>
                     <button
-                      onClick={() => copyToClipboard(l.key)}
+                      onClick={() => copyToClipboard(l.licenseKey)}
                       className="text-zinc-400 hover:text-accent-emerald p-1 rounded hover:bg-bg-hover"
                     >
                       <Copy className="w-3.5 h-3.5" />
@@ -853,6 +1042,289 @@ export function AdminPage() {
         >
           <AgentAdminPanel />
         </motion.div>
+      )}
+
+      {/* 订阅记录 */}
+      {tab === 'subscriptions' && (
+        <DataExplorerPanel config={{
+          title: '订阅记录',
+          collection: 'subscriptions',
+          columns: [
+            { field: 'openid', label: '用户', type: 'code', width: '140px' },
+            { field: 'plan', label: '套餐', type: 'badge', width: '100px', badgeMap: {
+              pro: { label: 'Pro', className: 'bg-accent-emerald/20 text-accent-emerald' },
+              pro_plus: { label: 'Pro+', className: 'bg-accent-violet/20 text-accent-violet' },
+              team: { label: 'Team', className: 'bg-accent-teal/20 text-accent-teal' },
+              enterprise: { label: 'Enterprise', className: 'bg-accent-amber/20 text-accent-amber' },
+            } },
+            { field: 'status', label: '状态', type: 'badge', width: '100px', badgeMap: {
+              active: { label: '生效中', className: 'bg-accent-emerald/20 text-accent-emerald' },
+              expired: { label: '已过期', className: 'bg-zinc-500/20 text-zinc-400' },
+              cancelled: { label: '已取消', className: 'bg-red-500/20 text-red-400' },
+            } },
+            { field: 'startedAt', label: '开始时间', type: 'date', width: '160px' },
+            { field: 'expiresAt', label: '到期时间', type: 'date', width: '160px' },
+            { field: 'amount', label: '金额(分)', type: 'number', width: '90px' },
+          ],
+          searchFields: ['openid', 'plan'],
+          searchPlaceholder: '搜索 openid / 套餐',
+        }} />
+      )}
+
+      {/* 认证订单 */}
+      {tab === 'certify_orders' && (
+        <DataExplorerPanel config={{
+          title: '认证订单',
+          collection: 'certify_orders',
+          columns: [
+            { field: 'orderId', label: '订单号', type: 'code', width: '160px' },
+            { field: 'openid', label: '用户', type: 'code', width: '140px' },
+            { field: 'certifyType', label: '认证类型', type: 'text', width: '120px' },
+            { field: 'amount', label: '金额(分)', type: 'number', width: '90px' },
+            { field: 'status', label: '状态', type: 'badge', width: '100px', badgeMap: {
+              paid: { label: '已支付', className: 'bg-accent-emerald/20 text-accent-emerald' },
+              pending: { label: '待支付', className: 'bg-amber-500/20 text-amber-400' },
+              failed: { label: '失败', className: 'bg-red-500/20 text-red-400' },
+              refunded: { label: '已退款', className: 'bg-zinc-500/20 text-zinc-400' },
+            } },
+            { field: 'createdAt', label: '创建时间', type: 'date', width: '160px' },
+            { field: 'paidAt', label: '支付时间', type: 'date', width: '160px' },
+          ],
+          searchFields: ['orderId', 'openid', 'certifyType'],
+          searchPlaceholder: '搜索订单号 / openid / 认证类型',
+        }} />
+      )}
+
+      {/* Token 用量日志 */}
+      {tab === 'token_logs' && (
+        <DataExplorerPanel config={{
+          title: 'Token 用量日志',
+          collection: 'token_usage_logs',
+          columns: [
+            { field: 'openid', label: '用户', type: 'code', width: '140px' },
+            { field: 'model', label: '模型', type: 'text', width: '140px' },
+            { field: 'tokensIn', label: '输入 Tokens', type: 'number', width: '110px' },
+            { field: 'tokensOut', label: '输出 Tokens', type: 'number', width: '110px' },
+            { field: 'tokensTotal', label: '总计', type: 'number', width: '90px' },
+            { field: 'createdAt', label: '时间', type: 'date', width: '160px' },
+          ],
+          searchFields: ['openid', 'model'],
+          searchPlaceholder: '搜索 openid / 模型',
+        }} />
+      )}
+
+      {/* 智能体配置 */}
+      {tab === 'agent_config' && (
+        <div className="space-y-4">
+          <div className="card-base p-6">
+            <h3 className="text-sm font-semibold text-zinc-200 mb-2 flex items-center gap-2">
+              <Cog className="w-4 h-4 text-accent-emerald" />
+              智能体配置说明
+            </h3>
+            <p className="text-xs text-zinc-400 mb-4">
+              智能体配置是用户在 Studio 工作台中个性化设置的 Agent 参数。大部分配置存储在用户浏览器本地（localStorage），
+              仅 BYOK 绑定已实现云端同步。以下为各配置项的管理方式说明。
+            </p>
+
+            <div className="space-y-3">
+              <div className="p-4 rounded-lg bg-bg-deep border border-border-subtle">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-sm font-bold text-zinc-200">系统提示词（System Prompt）</div>
+                    <div className="text-xs text-zinc-500 mt-1">用户自定义的 Agent 系统提示词，决定 AI 的角色和行为</div>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded bg-zinc-700 text-zinc-400">用户本地管理</span>
+                </div>
+                <div className="text-xs text-zinc-600">存储位置：浏览器 localStorage · 用户可在 Studio 设置页修改</div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-bg-deep border border-border-subtle">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-sm font-bold text-zinc-200">模型参数</div>
+                    <div className="text-xs text-zinc-500 mt-1">温度（Temperature）、Top P、Max Tokens 等生成参数</div>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded bg-zinc-700 text-zinc-400">用户本地管理</span>
+                </div>
+                <div className="text-xs text-zinc-600">存储位置：浏览器 localStorage · 用户可在 Studio 设置页修改</div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-bg-deep border border-border-subtle">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-sm font-bold text-zinc-200">MCP Server 配置</div>
+                    <div className="text-xs text-zinc-500 mt-1">stdio / sse 端点配置，连接外部 MCP 工具服务器</div>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded bg-zinc-700 text-zinc-400">用户本地管理</span>
+                </div>
+                <div className="text-xs text-zinc-600">存储位置：浏览器 localStorage · 用户可在 Studio 设置页修改</div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-bg-deep border border-border-subtle">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-sm font-bold text-zinc-200">工具启用开关</div>
+                    <div className="text-xs text-zinc-500 mt-1">42 个内置工具的启用/禁用开关</div>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded bg-zinc-700 text-zinc-400">用户本地管理</span>
+                </div>
+                <div className="text-xs text-zinc-600">存储位置：浏览器 localStorage · 用户可在 Studio 设置页修改</div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-accent-emerald/5 border border-accent-emerald/30">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-sm font-bold text-zinc-200">BYOK 绑定（自带 API Key）</div>
+                    <div className="text-xs text-zinc-500 mt-1">用户绑定的自有 AI 供应商 API Key（OpenAI / DeepSeek / 通义等）</div>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded bg-accent-emerald/20 text-accent-emerald">云端同步</span>
+                </div>
+                <div className="text-xs text-zinc-600 mb-2">存储位置：byok_bindings 集合 · 管理员可在 BYOK 绑定 Tab 强制解绑</div>
+                <button
+                  onClick={() => handleTabChange('byok')}
+                  className="text-xs px-3 py-1 rounded bg-accent-emerald/10 text-accent-emerald border border-accent-emerald/30 hover:bg-accent-emerald/20"
+                >
+                  前往 BYOK 绑定管理 →
+                </button>
+              </div>
+
+              <div className="p-4 rounded-lg bg-bg-deep border border-border-subtle">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-sm font-bold text-zinc-200">Hooks 配置</div>
+                    <div className="text-xs text-zinc-500 mt-1">工具执行前后的钩子脚本配置</div>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded bg-zinc-700 text-zinc-400">用户本地管理</span>
+                </div>
+                <div className="text-xs text-zinc-600">存储位置：浏览器 localStorage · 用户可在 Studio 设置页修改</div>
+              </div>
+            </div>
+
+            <div className="mt-4 p-3 rounded-lg bg-accent-amber/10 border border-accent-amber/30 text-xs text-accent-amber">
+              <strong>说明：</strong>标记为"用户本地管理"的配置项存储在用户浏览器中，管理员无法集中查看或修改。
+              如需实现多端同步和集中管理，需将配置迁移到 <code className="text-accent-amber">agent_configs</code> 集合（已列入产品路线图）。
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 决策锁审计 */}
+      {tab === 'decision_locks' && (
+        <DataExplorerPanel config={{
+          title: '决策锁审计',
+          collection: 'decision_locks',
+          columns: [
+            { field: 'timestamp', label: '时间', type: 'date', width: '160px' },
+            { field: 'input', label: '输入摘要', type: 'truncate', truncateLength: 60 },
+            { field: 'passed', label: '通过', type: 'boolean', width: '60px' },
+            { field: 'hardMode', label: '模式', type: 'badge', width: '80px', badgeMap: {
+              true: { label: '硬校验', className: 'bg-red-500/20 text-red-400' },
+              false: { label: '软校验', className: 'bg-zinc-500/20 text-zinc-400' },
+            } },
+            { field: 'blockedReason', label: '阻断原因', type: 'truncate', truncateLength: 50 },
+            { field: 'totalDurationMs', label: '耗时(ms)', type: 'number', width: '90px' },
+          ],
+          searchFields: ['input', 'blockedReason'],
+          searchPlaceholder: '搜索输入 / 阻断原因',
+        }} />
+      )}
+
+      {/* 进化记录 */}
+      {tab === 'evolution' && (
+        <DataExplorerPanel config={{
+          title: '进化记录',
+          collection: 'evolution_records',
+          columns: [
+            { field: 'timestamp', label: '时间', type: 'date', width: '160px' },
+            { field: 'trigger', label: '触发', type: 'truncate', truncateLength: 40 },
+            { field: 'boundary', label: '边界感知', type: 'truncate', truncateLength: 40 },
+            { field: 'gap', label: '差距分析', type: 'truncate', truncateLength: 40 },
+            { field: 'verified', label: '已验证', type: 'boolean', width: '70px' },
+            { field: 'recursed', label: '已递归', type: 'boolean', width: '70px' },
+            { field: 'depth', label: '深度', type: 'number', width: '60px' },
+            { field: 'durationMs', label: '耗时(ms)', type: 'number', width: '90px' },
+          ],
+          searchFields: ['trigger', 'boundary', 'gap'],
+          searchPlaceholder: '搜索触发 / 边界 / 差距',
+        }} />
+      )}
+
+      {/* 行为银行 */}
+      {tab === 'behavior_bank' && <BehaviorBankPanel />}
+
+      {/* 私有技能审核 */}
+      {tab === 'private_skills' && <PrivateSkillReviewPanel />}
+
+      {/* BYOK 绑定 */}
+      {tab === 'byok' && (
+        <DataExplorerPanel config={{
+          title: 'BYOK 绑定',
+          collection: 'byok_bindings',
+          columns: [
+            { field: 'openid', label: '用户', type: 'code', width: '140px' },
+            { field: 'provider', label: '供应商', type: 'text', width: '100px' },
+            { field: 'baseUrl', label: 'Base URL', type: 'truncate', truncateLength: 40 },
+            { field: 'model', label: '模型', type: 'text', width: '140px' },
+            { field: 'active', label: '生效中', type: 'boolean', width: '70px' },
+            { field: 'boundAt', label: '绑定时间', type: 'date', width: '160px' },
+          ],
+          searchFields: ['openid', 'provider', 'model'],
+          searchPlaceholder: '搜索 openid / 供应商 / 模型',
+          rowActions: [{
+            label: '强制解绑',
+            onClick: async (row) => {
+              const res = await callAdminHttp('unbindByok', { openid: row.openid })
+              if (res.code !== 0) alert(res.message || '解绑失败')
+            },
+            className: 'text-red-400 hover:bg-red-500/10',
+            confirm: '确认强制解绑该用户的 BYOK？',
+            show: (row) => row.active !== false,
+          }],
+        }} />
+      )}
+
+      {/* 平台配置 */}
+      {tab === 'platform_config' && <PlatformConfigPanel />}
+
+      {/* 错误监控 */}
+      {tab === 'error_monitor' && <ErrorMonitorPanel />}
+
+      {/* 同步日志 */}
+      {tab === 'sync_logs' && (
+        <DataExplorerPanel config={{
+          title: '同步日志',
+          collection: 'sync_logs',
+          columns: [
+            { field: 'createdAt', label: '时间', type: 'date', width: '160px' },
+            { field: 'openid', label: '用户', type: 'code', width: '140px' },
+            { field: 'action', label: '操作', type: 'text', width: '140px' },
+            { field: 'collection', label: '集合', type: 'text', width: '140px' },
+            { field: 'status', label: '状态', type: 'badge', width: '100px', badgeMap: {
+              success: { label: '成功', className: 'bg-accent-emerald/20 text-accent-emerald' },
+              failed: { label: '失败', className: 'bg-red-500/20 text-red-400' },
+              pending: { label: '进行中', className: 'bg-amber-500/20 text-amber-400' },
+            } },
+            { field: 'durationMs', label: '耗时(ms)', type: 'number', width: '90px' },
+          ],
+          searchFields: ['openid', 'action', 'collection'],
+          searchPlaceholder: '搜索 openid / 操作 / 集合',
+        }} />
+      )}
+
+      </TabErrorBoundary>
+
+        </div>{/* 关闭右侧主内容 */}
+      </div>{/* 关闭 flex 容器 */}
+
+      {/* Toast 操作反馈 */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg border ${
+          toast.type === 'success'
+            ? 'bg-accent-emerald/10 border-accent-emerald/30 text-accent-emerald'
+            : 'bg-red-500/10 border-red-500/30 text-red-400'
+        }`}>
+          <span className="text-sm font-medium">{toast.msg}</span>
+        </div>
       )}
 
       {/* ICP 备案 */}
